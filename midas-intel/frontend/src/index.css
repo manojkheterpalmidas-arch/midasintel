@@ -503,6 +503,13 @@ html, body, #root {
   background: #b45309 !important;
 }
 
+.stop-btn {
+  background: var(--red) !important; color: white !important;
+}
+.stop-btn:hover:not(:disabled) {
+  background: #b91c1c !important;
+}
+
 /* ── API KEY GATE ────────────────────────────────────────────────── */
 
 .gate-screen {
