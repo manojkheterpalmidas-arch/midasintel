@@ -12,16 +12,17 @@ export function BatchMode({ apiBase, onComplete }) {
   const [currentMessage, setCurrentMessage] = useState('')
   const [results, setResults] = useState([])
   const [summary, setSummary] = useState(null)
-  const [disconnected, setDisconnected] = useState(false)
   const wsRef = useRef(null)
   const allUrlsRef = useRef([])
   const completedDomainsRef = useRef(new Set())
+  const stoppedRef = useRef(false)
 
   const startBatch = useCallback((urlLines, isResume = false) => {
     if (urlLines.length === 0) return
 
     setRunning(true)
     runningRef.current = true
+    stoppedRef.current = false
     setDisconnected(false)
     if (!isResume) {
       setProgress(0)
@@ -78,32 +79,23 @@ export function BatchMode({ apiBase, onComplete }) {
 
     ws.onerror = () => {
       if (runningRef.current) {
-        setDisconnected(true)
-        setRunning(false)
-        runningRef.current = false
-        setCurrentMessage('Connection lost — click Resume to continue')
         onComplete()
+        autoResume()
       }
     }
 
     ws.onclose = () => {
       if (runningRef.current) {
-        setDisconnected(true)
-        setRunning(false)
-        runningRef.current = false
-        setCurrentMessage('Connection lost — click Resume to continue')
         onComplete()
+        autoResume()
       }
     }
   }, [apiBase, recrawl, onComplete])
 
-  const handleRun = () => {
-    const lines = urls.split('\n').map(l => l.trim()).filter(Boolean)
-    startBatch(lines)
-  }
+  const autoResume = useCallback(() => {
+    // Don't auto-resume if user manually stopped
+    if (stoppedRef.current) return
 
-  const handleResume = () => {
-    // Filter out already-completed URLs
     const remaining = allUrlsRef.current.filter(u => {
       try {
         const d = new URL(u.startsWith('http') ? u : `https://${u}`).hostname.replace('www.', '')
@@ -113,12 +105,32 @@ export function BatchMode({ apiBase, onComplete }) {
       }
     })
     if (remaining.length > 0) {
-      setDisconnected(false)
-      startBatch(remaining, true)
+      setCurrentMessage(`Reconnecting... ${remaining.length} remaining`)
+      // Small delay before reconnecting to avoid hammering
+      setTimeout(() => startBatch(remaining, true), 2000)
     } else {
-      setDisconnected(false)
-      setCurrentMessage('All companies already processed')
+      // All done despite the disconnect
+      setRunning(false)
+      runningRef.current = false
+      setCurrentMessage('')
     }
+  }, [startBatch])
+
+  const handleRun = () => {
+    const lines = urls.split('\n').map(l => l.trim()).filter(Boolean)
+    startBatch(lines)
+  }
+
+  const handleStop = () => {
+    stoppedRef.current = true
+    runningRef.current = false
+    setRunning(false)
+    setCurrentMessage('Stopped by user')
+    if (wsRef.current) {
+      try { wsRef.current.close() } catch {}
+      wsRef.current = null
+    }
+    onComplete()
   }
 
   return (
@@ -144,9 +156,9 @@ export function BatchMode({ apiBase, onComplete }) {
         <button className="action-btn" onClick={handleRun} disabled={running || !urls.trim()}>
           {running ? 'Running...' : '🚀 Run batch'}
         </button>
-        {disconnected && (
-          <button className="action-btn resume-btn" onClick={handleResume}>
-            🔄 Resume ({allUrlsRef.current.length - completedDomainsRef.current.size} remaining)
+        {running && (
+          <button className="action-btn stop-btn" onClick={handleStop}>
+            ■ Stop
           </button>
         )}
         <label className="batch-checkbox">
@@ -154,13 +166,6 @@ export function BatchMode({ apiBase, onComplete }) {
           Re-crawl all
         </label>
       </div>
-
-      {disconnected && (
-        <div className="batch-disconnected mt-md">
-          Connection lost after {completedDomainsRef.current.size} companies.
-          Results saved so far are in the sidebar. Click Resume to continue with the remaining companies.
-        </div>
-      )}
 
       {running && (
         <div className="progress-section mt-md">
