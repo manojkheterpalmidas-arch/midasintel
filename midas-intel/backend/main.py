@@ -41,6 +41,7 @@ app.add_middleware(
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 DEEPSEEK_API_KEY = os.environ["DEEPSEEK_API_KEY"]
+FIRECRAWL_KEY = os.environ["FIRECRAWL_KEY"]
 SERPER_API_KEY = os.environ.get("SERPER_API_KEY", "")
 SCRAPINGBEE_KEY = os.environ.get("SCRAPINGBEE_KEY", "")
 COMPANIES_HOUSE_KEY = os.environ.get("COMPANIES_HOUSE_KEY", "")
@@ -64,11 +65,9 @@ def now_gmt2():
 
 class AnalyseRequest(BaseModel):
     url: str
-    firecrawl_key: str
 
 class BatchRequest(BaseModel):
     urls: list[str]
-    firecrawl_key: str
     recrawl: bool = False
 
 class NoteUpdate(BaseModel):
@@ -1365,11 +1364,11 @@ def generate_email(req: EmailRequest):
 
 
 @app.get("/api/credits")
-def get_credits(firecrawl_key: str = Query(...)):
-    if not firecrawl_key:
+def get_credits():
+    if not FIRECRAWL_KEY:
         return {"credits": None}
     try:
-        headers = {"Authorization": f"Bearer {firecrawl_key}"}
+        headers = {"Authorization": f"Bearer {FIRECRAWL_KEY}"}
         resp = http.get("https://api.firecrawl.dev/v1/team/credit-usage", headers=headers, timeout=10)
         if resp.status_code == 404:
             resp = http.get("https://api.firecrawl.dev/v2/team/credit-usage", headers=headers, timeout=10)
@@ -1456,31 +1455,21 @@ async def ws_analyse(websocket: WebSocket):
     try:
         data = await websocket.receive_json()
         url = data.get("url", "")
-        firecrawl_key = data.get("firecrawl_key", "")
 
-        if not url or not firecrawl_key:
-            await websocket.send_json({"type": "error", "message": "Missing url or firecrawl_key"})
+        if not url:
+            await websocket.send_json({"type": "error", "message": "Missing url"})
             await websocket.close()
             return
 
         def status_callback(stage, message, progress):
-            try:
-                asyncio.get_event_loop().call_soon_threadsafe(
-                    lambda: None  # placeholder
-                )
-            except:
-                pass
-            # We'll use a queue instead
             status_queue.append({"type": "progress", "stage": stage, "message": message, "progress": progress})
 
         status_queue = []
 
-        # Run analysis in thread pool
         loop = asyncio.get_event_loop()
-        import functools
 
         def run_analysis():
-            return analyse_single_url(url, firecrawl_key, status_callback=status_callback)
+            return analyse_single_url(url, FIRECRAWL_KEY, status_callback=status_callback)
 
         # Start analysis in background
         future = loop.run_in_executor(None, run_analysis)
@@ -1525,11 +1514,10 @@ async def ws_batch(websocket: WebSocket):
     try:
         data = await websocket.receive_json()
         urls = data.get("urls", [])
-        firecrawl_key = data.get("firecrawl_key", "")
         recrawl = data.get("recrawl", False)
 
-        if not urls or not firecrawl_key:
-            await websocket.send_json({"type": "error", "message": "Missing urls or firecrawl_key"})
+        if not urls:
+            await websocket.send_json({"type": "error", "message": "Missing urls"})
             await websocket.close()
             return
 
@@ -1578,7 +1566,7 @@ async def ws_batch(websocket: WebSocket):
 
             loop = asyncio.get_event_loop()
             callback = make_callback(status_queue)
-            future = loop.run_in_executor(None, lambda: analyse_single_url(url, firecrawl_key, status_callback=callback))
+            future = loop.run_in_executor(None, lambda: analyse_single_url(url, FIRECRAWL_KEY, status_callback=callback))
 
             while not future.done():
                 while status_queue:
