@@ -1542,63 +1542,84 @@ async def ws_batch(websocket: WebSocket):
         for idx, url in enumerate(unique_urls):
             d = extract_domain(url)
 
-            if not recrawl:
-                existing = find_in_history(d)
-                if existing:
-                    skipped += 1
-                    completed += 1
+            try:
+                if not recrawl:
+                    existing = find_in_history(d)
+                    if existing:
+                        skipped += 1
+                        completed += 1
+                        await websocket.send_json({
+                            "type": "batch_item",
+                            "index": idx, "domain": d,
+                            "company": existing.get("company", d),
+                            "status": "skipped",
+                            "score": existing.get("score", "—"),
+                            "progress": completed / total * 100
+                        })
+                        continue
+
+                status_queue = []
+
+                def make_callback(sq, _idx=idx, _d=d):
+                    def status_callback(stage, message, progress):
+                        sq.append({"type": "batch_progress", "index": _idx, "domain": _d, "stage": stage, "message": message, "item_progress": progress})
+                    return status_callback
+
+                loop = asyncio.get_event_loop()
+                callback = make_callback(status_queue)
+                future = loop.run_in_executor(None, lambda u=url, cb=callback: analyse_single_url(u, FIRECRAWL_KEY, status_callback=cb))
+
+                while not future.done():
+                    # Send queued progress messages
+                    while status_queue:
+                        await websocket.send_json(status_queue.pop(0))
+                    # Send heartbeat ping to keep connection alive
+                    await websocket.send_json({"type": "heartbeat"})
+                    await asyncio.sleep(1)
+
+                # Flush remaining progress messages
+                while status_queue:
+                    await websocket.send_json(status_queue.pop(0))
+
+                entry, error = future.result()
+                completed += 1
+
+                if entry:
+                    succeeded += 1
                     await websocket.send_json({
                         "type": "batch_item",
                         "index": idx, "domain": d,
-                        "company": existing.get("company", d),
-                        "status": "skipped",
-                        "score": existing.get("score", "—"),
+                        "company": entry.get("company", d),
+                        "status": "done",
+                        "score": entry.get("score", "Cold"),
                         "progress": completed / total * 100
                     })
-                    continue
+                else:
+                    failed += 1
+                    await websocket.send_json({
+                        "type": "batch_item",
+                        "index": idx, "domain": d,
+                        "company": d,
+                        "status": "failed",
+                        "error": error,
+                        "progress": completed / total * 100
+                    })
 
-            status_queue = []
-
-            def make_callback(sq):
-                def status_callback(stage, message, progress):
-                    sq.append({"type": "batch_progress", "index": idx, "domain": d, "stage": stage, "message": message, "item_progress": progress})
-                return status_callback
-
-            loop = asyncio.get_event_loop()
-            callback = make_callback(status_queue)
-            future = loop.run_in_executor(None, lambda: analyse_single_url(url, FIRECRAWL_KEY, status_callback=callback))
-
-            while not future.done():
-                while status_queue:
-                    await websocket.send_json(status_queue.pop(0))
-                await asyncio.sleep(0.5)
-
-            while status_queue:
-                await websocket.send_json(status_queue.pop(0))
-
-            entry, error = future.result()
-            completed += 1
-
-            if entry:
-                succeeded += 1
-                await websocket.send_json({
-                    "type": "batch_item",
-                    "index": idx, "domain": d,
-                    "company": entry.get("company", d),
-                    "status": "done",
-                    "score": entry.get("score", "Cold"),
-                    "progress": completed / total * 100
-                })
-            else:
+            except Exception as company_err:
+                # Single company failure shouldn't kill the entire batch
                 failed += 1
-                await websocket.send_json({
-                    "type": "batch_item",
-                    "index": idx, "domain": d,
-                    "company": d,
-                    "status": "failed",
-                    "error": error,
-                    "progress": completed / total * 100
-                })
+                completed += 1
+                try:
+                    await websocket.send_json({
+                        "type": "batch_item",
+                        "index": idx, "domain": d,
+                        "company": d,
+                        "status": "failed",
+                        "error": str(company_err),
+                        "progress": completed / total * 100
+                    })
+                except:
+                    break  # WS is dead, stop the batch
 
         await websocket.send_json({
             "type": "batch_complete",
