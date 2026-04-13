@@ -8,7 +8,7 @@ export function useAnalysis(apiBase) {
   const [error, setError] = useState(null)
   const wsRef = useRef(null)
 
-  const startAnalysis = useCallback((url, firecrawlKey) => {
+  const startAnalysis = useCallback((url) => {
     return new Promise((resolve) => {
       setAnalysing(true)
       setProgress(0)
@@ -21,7 +21,7 @@ export function useAnalysis(apiBase) {
       wsRef.current = ws
 
       ws.onopen = () => {
-        ws.send(JSON.stringify({ url, firecrawl_key: firecrawlKey }))
+        ws.send(JSON.stringify({ url }))
       }
 
       ws.onmessage = (event) => {
