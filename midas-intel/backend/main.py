@@ -893,18 +893,25 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
         if ch_text:
             _extra_corpus += f"\n\n[SOURCE: Company Registry]\n{ch_text}"
 
+        # Track whether employee_count came from a structured/reliable source
+        _emp_from_structured = False
+
         li_text, li_emp = _lookup_results.get("linkedin", ("", ""))
         if li_text:
             _extra_corpus += f"\n\n[SOURCE: LinkedIn]\n{li_text}"
-            if li_emp and not _company_data.get("employee_count"):
+            if li_emp:
+                # LinkedIn is the most reliable source — always prefer it
                 _company_data["employee_count"] = li_emp
+                _emp_from_structured = True
 
         gd_text, gd_rev = _lookup_results.get("reviews", ("", 0))
         gd_emp = extract_employee_count_from_text(gd_text)
         if gd_text:
             _extra_corpus += f"\n\n[SOURCE: Glassdoor & Indeed]\n{gd_text}"
-        if gd_emp and not _company_data.get("employee_count"):
+        if gd_emp and not _emp_from_structured:
+            # Glassdoor is second most reliable — use if LinkedIn didn't have it
             _company_data["employee_count"] = gd_emp
+            _emp_from_structured = True
 
         pp_text, pp_proj = _lookup_results.get("planning", ("", 0))
         if pp_text:
@@ -924,9 +931,14 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
             enriched = corpus + _extra_corpus[:20000]
             company_raw2 = analyze_company(enriched)
             _company_data2 = safe_json(company_raw2)
-            for key in ["people", "projects", "locations", "employee_count", "founded"]:
+            # Merge fields where re-analysis found more data — but NEVER let
+            # DeepSeek overwrite employee_count if we got it from a structured source
+            for key in ["people", "projects", "locations", "founded"]:
                 if _company_data2.get(key) and len(str(_company_data2.get(key))) > len(str(_company_data.get(key, ""))):
                     _company_data[key] = _company_data2[key]
+            # Only use DeepSeek's employee_count if no structured source provided one
+            if not _emp_from_structured and _company_data2.get("employee_count"):
+                _company_data["employee_count"] = _company_data2["employee_count"]
 
         if not _company_data.get("employee_count"):
             fb_emp = extract_employee_count_from_text(_extra_corpus)
