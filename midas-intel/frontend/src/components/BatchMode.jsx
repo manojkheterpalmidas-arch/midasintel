@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 
 const SCORE_EMOJI = { Hot: '🔥', Warm: '⚡', Cold: '❄️' }
 
-export function BatchMode({ apiBase, firecrawlKey, onComplete }) {
+export function BatchMode({ apiBase, onComplete }) {
   const [urls, setUrls] = useState('')
   const [recrawl, setRecrawl] = useState(false)
   const [running, setRunning] = useState(false)
@@ -27,7 +27,7 @@ export function BatchMode({ apiBase, firecrawlKey, onComplete }) {
     wsRef.current = ws
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ urls: lines, firecrawl_key: firecrawlKey, recrawl }))
+      ws.send(JSON.stringify({ urls: lines, recrawl }))
     }
 
     ws.onmessage = (event) => {
