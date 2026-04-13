@@ -437,9 +437,11 @@ def scrape_with_scrapingbee(url):
         return []
 
 
-def firecrawl_crawl(url, firecrawl_key, max_pages=30):
+def firecrawl_crawl(url, firecrawl_key, max_pages=30, status_callback=None):
     try:
         # Try scraping with actions for cookie popups
+        if status_callback:
+            status_callback("crawling", f"Scraping homepage...", 6)
         action_resp = http.post(
             "https://api.firecrawl.dev/v1/scrape",
             headers={"Authorization": f"Bearer {firecrawl_key}", "Content-Type": "application/json"},
@@ -457,6 +459,8 @@ def firecrawl_crawl(url, firecrawl_key, max_pages=30):
         if homepage_md and len(homepage_md) > 500:
             results = [{"url": url, "markdown": homepage_md}]
             try:
+                if status_callback:
+                    status_callback("crawling", f"Homepage done, crawling subpages...", 8)
                 resp = http.post(
                     "https://api.firecrawl.dev/v1/crawl",
                     headers={"Authorization": f"Bearer {firecrawl_key}", "Content-Type": "application/json"},
@@ -464,7 +468,7 @@ def firecrawl_crawl(url, firecrawl_key, max_pages=30):
                 )
                 job_id = resp.json().get("id")
                 if job_id:
-                    for _ in range(40):
+                    for poll_i in range(40):
                         time.sleep(3)
                         poll = http.get(
                             f"https://api.firecrawl.dev/v1/crawl/{job_id}",
@@ -472,7 +476,12 @@ def firecrawl_crawl(url, firecrawl_key, max_pages=30):
                         ).json()
                         status = poll.get("status")
                         pages = poll.get("data", [])
-                        if status == "completed" or (status == "scraping" and len(pages) >= max_pages - 2):
+                        page_count = len(pages)
+                        # Live progress during polling
+                        if status_callback:
+                            crawl_pct = min(8 + (page_count / max_pages) * 17, 25)
+                            status_callback("crawling", f"Crawled {page_count} pages...", crawl_pct)
+                        if status == "completed" or (status == "scraping" and page_count >= max_pages - 2):
                             extra = [
                                 {"url": p.get("metadata", {}).get("sourceURL", url), "markdown": p.get("markdown", "")}
                                 for p in pages if p.get("markdown", "").strip() and len(p.get("markdown","")) > 500
@@ -486,6 +495,8 @@ def firecrawl_crawl(url, firecrawl_key, max_pages=30):
             return results
 
         # Fallback to normal crawl
+        if status_callback:
+            status_callback("crawling", f"Starting full crawl...", 8)
         resp = http.post(
             "https://api.firecrawl.dev/v1/crawl",
             headers={"Authorization": f"Bearer {firecrawl_key}", "Content-Type": "application/json"},
@@ -495,7 +506,7 @@ def firecrawl_crawl(url, firecrawl_key, max_pages=30):
         if not job_id:
             return firecrawl_multi_scrape(url, firecrawl_key)
 
-        for _ in range(36):
+        for poll_i in range(36):
             time.sleep(5)
             poll = http.get(
                 f"https://api.firecrawl.dev/v1/crawl/{job_id}",
@@ -503,7 +514,12 @@ def firecrawl_crawl(url, firecrawl_key, max_pages=30):
             ).json()
             status = poll.get("status")
             pages = poll.get("data", [])
-            if status == "completed" or (status == "scraping" and len(pages) >= max_pages - 2):
+            page_count = len(pages)
+            # Live progress during polling
+            if status_callback:
+                crawl_pct = min(8 + (page_count / max_pages) * 17, 25)
+                status_callback("crawling", f"Crawled {page_count} pages...", crawl_pct)
+            if status == "completed" or (status == "scraping" and page_count >= max_pages - 2):
                 results = [
                     {"url": p.get("metadata", {}).get("sourceURL", url), "markdown": p.get("markdown", "")}
                     for p in pages if p.get("markdown","").strip() and len(p.get("markdown","")) > 500
@@ -906,7 +922,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
             status_callback("crawling", f"Crawling {_domain}...", 5)
 
         # ── STEP 1: Crawl ──
-        pages = firecrawl_crawl(website_url, firecrawl_key)
+        pages = firecrawl_crawl(website_url, firecrawl_key, status_callback=status_callback)
 
         def _is_thin(pl):
             if not pl: return True
