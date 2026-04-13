@@ -788,26 +788,44 @@ Active Officers:
 def lookup_linkedin_company(company_name, domain=""):
     try:
         results = []
-        # Include domain to anchor to the right company
         queries = [
-            f'site:linkedin.com/company "{company_name}" employees',
-            f'"{company_name}" "{domain}" "employees" LinkedIn',
-            f'"{company_name}" "company size"',
+            f'site:linkedin.com/company "{company_name}"',
+            f'linkedin.com "{company_name}" "{domain}"',
         ]
         for query in queries:
             results.extend(serpapi_search(query, num_results=6))
 
-        # Filter results: prefer those that mention the domain or exact company name
         text = format_serpapi_results(results, max_chars=5000)
 
-        # Extract employee count, but validate it against the domain
-        # If we have domain-specific results, only extract from those
-        domain_results = [r for r in results if domain and domain in str(r).lower()]
-        if domain_results:
-            domain_text = format_serpapi_results(domain_results, max_chars=3000)
-            employee_signal = extract_employee_count_from_text(domain_text)
-        else:
-            employee_signal = extract_employee_count_from_text(text)
+        # Smart employee extraction:
+        # 1. First try to find a LinkedIn result that mentions the domain — that's the right company
+        # 2. If no domain match, look for results with the EXACT company name in the link/title
+        # 3. If multiple employee counts found, prefer the smallest (small firms get drowned by big ones)
+        employee_signal = ""
+
+        # Pass 1: results that contain the domain — strongest signal
+        domain_short = domain.replace(".co.uk", "").replace(".com", "").replace(".org", "")
+        for r in results:
+            r_text = f"{r.get('title','')} {r.get('snippet','')} {r.get('link','')}".lower()
+            if domain in r_text or (domain_short and domain_short in r_text):
+                emp = extract_employee_count_from_text(r_text)
+                if emp:
+                    employee_signal = emp
+                    break
+
+        # Pass 2: if no domain-matched result, look for the LinkedIn company page specifically
+        if not employee_signal:
+            for r in results:
+                link = r.get("link", "").lower()
+                # Only trust linkedin.com/company/ pages, not random mentions
+                if "linkedin.com/company/" in link:
+                    snippet = r.get("snippet", "")
+                    emp = extract_employee_count_from_text(snippet)
+                    if emp:
+                        # Sanity check: if the website we crawled only has a few pages of content
+                        # and the LinkedIn says 1000+ employees, it's probably the wrong company
+                        employee_signal = emp
+                        break
 
         return text, employee_signal
     except:
@@ -816,13 +834,14 @@ def lookup_linkedin_company(company_name, domain=""):
 
 def lookup_glassdoor(company_name, domain):
     try:
-        # Include domain to avoid matching wrong companies with similar names
+        # Include domain to anchor to the right company
+        domain_short = domain.replace(".co.uk", "").replace(".com", "").replace(".org", "")
         all_text = format_serpapi_results(
-            serpapi_search(f'glassdoor "{company_name}" "{domain}" reviews', num_results=10),
+            serpapi_search(f'glassdoor "{company_name}" {domain_short} reviews', num_results=10),
             max_chars=2000
         )
         all_text += "\n\n" + format_serpapi_results(
-            serpapi_search(f'"{company_name}" "{domain}" employees size', num_results=10),
+            serpapi_search(f'"{company_name}" {domain_short} employees size', num_results=10),
             max_chars=2000
         )
 
@@ -1017,6 +1036,20 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
         if gd_emp and not _emp_from_structured:
             _company_data["employee_count"] = gd_emp
             _emp_from_structured = True
+
+        # Sanity check: if the website only has a handful of people listed
+        # but the employee count says 500+, it's almost certainly a wrong-company match.
+        # Small engineering consultancies don't have 500+ staff with only 3-5 people on their site.
+        if _emp_from_structured:
+            people_on_site = len(_company_data.get("people", []))
+            emp_str = _company_data.get("employee_count", "")
+            # Extract the first number from the employee string for comparison
+            emp_nums = re.findall(r'[\d,]+', emp_str.replace(",", ""))
+            first_num = int(emp_nums[0]) if emp_nums else 0
+            if people_on_site <= 10 and first_num >= 200:
+                # Very likely wrong company — clear the count, let DeepSeek decide from site content
+                _company_data["employee_count"] = ""
+                _emp_from_structured = False
 
         pp_text, pp_proj = _lookup_results.get("planning", ("", 0))
         if pp_text:
