@@ -6,6 +6,7 @@ export function BatchMode({ apiBase, onComplete }) {
   const [urls, setUrls] = useState('')
   const [recrawl, setRecrawl] = useState(false)
   const [running, setRunning] = useState(false)
+  const runningRef = useRef(false)
   const [progress, setProgress] = useState(0)
   const [currentDomain, setCurrentDomain] = useState('')
   const [currentMessage, setCurrentMessage] = useState('')
@@ -18,6 +19,7 @@ export function BatchMode({ apiBase, onComplete }) {
     if (lines.length === 0) return
 
     setRunning(true)
+    runningRef.current = true
     setProgress(0)
     setResults([])
     setSummary(null)
@@ -42,18 +44,38 @@ export function BatchMode({ apiBase, onComplete }) {
       } else if (msg.type === 'batch_item') {
         setResults(prev => [...prev, msg])
         setProgress(msg.progress)
+        // Refresh sidebar after each company so results appear immediately
+        if (msg.status === 'done') {
+          onComplete()
+        }
       } else if (msg.type === 'batch_complete') {
         setSummary(msg)
         setRunning(false)
+        runningRef.current = false
         onComplete()
         ws.close()
       } else if (msg.type === 'error') {
         setRunning(false)
+        runningRef.current = false
+        onComplete()
         ws.close()
       }
     }
 
-    ws.onerror = () => setRunning(false)
+    ws.onerror = () => {
+      setRunning(false)
+      runningRef.current = false
+      onComplete()
+    }
+
+    ws.onclose = () => {
+      // Safety net — if WS closes unexpectedly, still refresh sidebar
+      if (runningRef.current) {
+        setRunning(false)
+        runningRef.current = false
+        onComplete()
+      }
+    }
   }
 
   return (
