@@ -16,6 +16,18 @@ export function BatchMode({ apiBase, onComplete }) {
   const allUrlsRef = useRef([])
   const completedDomainsRef = useRef(new Set())
   const stoppedRef = useRef(false)
+  const resumingRef = useRef(false)  // Prevent double auto-resume from onerror + onclose
+
+  const getRemainingUrls = useCallback(() => {
+    return allUrlsRef.current.filter(u => {
+      try {
+        const d = new URL(u.startsWith('http') ? u : `https://${u}`).hostname.replace('www.', '')
+        return !completedDomainsRef.current.has(d)
+      } catch {
+        return true
+      }
+    })
+  }, [])
 
   const startBatch = useCallback((urlLines, isResume = false) => {
     if (urlLines.length === 0) return
@@ -23,7 +35,8 @@ export function BatchMode({ apiBase, onComplete }) {
     setRunning(true)
     runningRef.current = true
     stoppedRef.current = false
-    setDisconnected(false)
+    resumingRef.current = false
+
     if (!isResume) {
       setProgress(0)
       setResults([])
@@ -43,7 +56,6 @@ export function BatchMode({ apiBase, onComplete }) {
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
 
-      // Ignore heartbeat pings from backend
       if (msg.type === 'heartbeat') return
 
       if (msg.type === 'batch_start') {
@@ -55,11 +67,9 @@ export function BatchMode({ apiBase, onComplete }) {
       } else if (msg.type === 'batch_item') {
         setResults(prev => [...prev, msg])
         setProgress(msg.progress)
-        // Track completed domains for resume
         if (msg.domain) {
           completedDomainsRef.current.add(msg.domain)
         }
-        // Refresh sidebar after each completed company
         if (msg.status === 'done') {
           onComplete()
         }
@@ -77,44 +87,32 @@ export function BatchMode({ apiBase, onComplete }) {
       }
     }
 
-    ws.onerror = () => {
-      if (runningRef.current) {
-        onComplete()
-        autoResume()
+    // Auto-resume on unexpected disconnect (but not if user clicked Stop)
+    const handleDisconnect = () => {
+      if (stoppedRef.current || resumingRef.current) return
+      if (!runningRef.current) return
+
+      resumingRef.current = true  // Prevent double-fire from onerror + onclose
+      onComplete()
+
+      const remaining = getRemainingUrls()
+      if (remaining.length > 0) {
+        // Keep running=true so the Stop button stays visible
+        setCurrentMessage(`Reconnecting... ${remaining.length} remaining`)
+        setTimeout(() => {
+          resumingRef.current = false
+          startBatch(remaining, true)
+        }, 2000)
+      } else {
+        setRunning(false)
+        runningRef.current = false
+        setCurrentMessage('')
       }
     }
 
-    ws.onclose = () => {
-      if (runningRef.current) {
-        onComplete()
-        autoResume()
-      }
-    }
-  }, [apiBase, recrawl, onComplete])
-
-  const autoResume = useCallback(() => {
-    // Don't auto-resume if user manually stopped
-    if (stoppedRef.current) return
-
-    const remaining = allUrlsRef.current.filter(u => {
-      try {
-        const d = new URL(u.startsWith('http') ? u : `https://${u}`).hostname.replace('www.', '')
-        return !completedDomainsRef.current.has(d)
-      } catch {
-        return true
-      }
-    })
-    if (remaining.length > 0) {
-      setCurrentMessage(`Reconnecting... ${remaining.length} remaining`)
-      // Small delay before reconnecting to avoid hammering
-      setTimeout(() => startBatch(remaining, true), 2000)
-    } else {
-      // All done despite the disconnect
-      setRunning(false)
-      runningRef.current = false
-      setCurrentMessage('')
-    }
-  }, [startBatch])
+    ws.onerror = handleDisconnect
+    ws.onclose = handleDisconnect
+  }, [apiBase, recrawl, onComplete, getRemainingUrls])
 
   const handleRun = () => {
     const lines = urls.split('\n').map(l => l.trim()).filter(Boolean)
