@@ -439,6 +439,9 @@ export function Report({ report, apiBase, firecrawlKey, onRefresh }) {
               {report.domain} ↗
             </a>
             {report.date && <span className="report-date">Analysed {report.days_ago || report.date}</span>}
+            <button className="recrawl-btn" onClick={onRefresh} title="Re-crawl this company fresh">
+              🔄 Re-crawl
+            </button>
           </div>
           <div className="report-meta">
             <ScoreBadge score={score} />
