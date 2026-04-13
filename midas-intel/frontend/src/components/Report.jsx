@@ -434,6 +434,12 @@ export function Report({ report, apiBase, firecrawlKey, onRefresh }) {
       <div className="report-header">
         <div className="report-header-left">
           <h1 className="report-company">{companyName}</h1>
+          <div className="report-domain">
+            <a href={`https://${report.domain}`} target="_blank" rel="noreferrer">
+              {report.domain} ↗
+            </a>
+            {report.date && <span className="report-date">Analysed {report.days_ago || report.date}</span>}
+          </div>
           <div className="report-meta">
             <ScoreBadge score={score} />
             {cd.locations?.length > 0 && <span>{cd.locations.join(', ')}</span>}

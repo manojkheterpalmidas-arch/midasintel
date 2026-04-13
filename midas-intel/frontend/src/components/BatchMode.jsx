@@ -22,7 +22,7 @@ export function BatchMode({ apiBase, firecrawlKey, onComplete }) {
     setResults([])
     setSummary(null)
 
-    const wsUrl = apiBase.replace('http', 'ws') + '/ws/batch'
+    const wsUrl = apiBase.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws/batch'
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 

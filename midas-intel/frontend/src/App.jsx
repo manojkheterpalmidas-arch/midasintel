@@ -14,14 +14,28 @@ export default function App() {
   const [mode, setMode] = useState('single')
   const [activeReport, setActiveReport] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [credits, setCredits] = useState(null)
 
   const { history, refreshHistory, searchHistory, deleteFromHistory } = useHistory(API_BASE)
   const { analysing, progress, progressMessage, stage, startAnalysis, error: analysisError } = useAnalysis(API_BASE)
 
+  // Fetch Firecrawl credits
   useEffect(() => {
-    if (firecrawlKey) {
-      localStorage.setItem('firecrawl_key', firecrawlKey)
+    if (!firecrawlKey) return
+    localStorage.setItem('firecrawl_key', firecrawlKey)
+
+    const fetchCredits = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/credits?firecrawl_key=${encodeURIComponent(firecrawlKey)}`)
+        const data = await res.json()
+        setCredits(data.credits)
+      } catch {
+        setCredits(null)
+      }
     }
+    fetchCredits()
+    const interval = setInterval(fetchCredits, 300000)
+    return () => clearInterval(interval)
   }, [firecrawlKey])
 
   const handleAnalyse = async (url) => {
@@ -29,6 +43,12 @@ export default function App() {
     if (result) {
       setActiveReport(result)
       refreshHistory()
+      // Refresh credits after analysis
+      try {
+        const res = await fetch(`${API_BASE}/api/credits?firecrawl_key=${encodeURIComponent(firecrawlKey)}`)
+        const data = await res.json()
+        setCredits(data.credits)
+      } catch {}
     }
   }
 
@@ -53,7 +73,6 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {/* Top bar */}
       <header className="top-bar">
         <div className="top-bar-left">
           <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
@@ -68,9 +87,12 @@ export default function App() {
         </div>
         <div className="top-bar-right">
           <span className="user-label">Manoj · MIDAS IT</span>
+          <span className="credits-label">
+            {credits !== null ? `Firecrawl: ${credits} credits` : 'Firecrawl: —'}
+          </span>
           <button
             className="key-btn"
-            onClick={() => { localStorage.removeItem('firecrawl_key'); setFirecrawlKey('') }}
+            onClick={() => { localStorage.removeItem('firecrawl_key'); setFirecrawlKey(''); setCredits(null) }}
             title="Change Firecrawl key"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -81,7 +103,6 @@ export default function App() {
       </header>
 
       <div className="app-body">
-        {/* Sidebar */}
         <Sidebar
           open={sidebarOpen}
           history={history}
@@ -92,9 +113,7 @@ export default function App() {
           apiBase={API_BASE}
         />
 
-        {/* Main content */}
         <main className={`main-content ${sidebarOpen ? '' : 'full-width'}`}>
-          {/* Mode toggle + search */}
           <div className="input-row">
             <div className="mode-toggle">
               <button className={mode === 'single' ? 'active' : ''} onClick={() => setMode('single')}>Single</button>
@@ -112,6 +131,8 @@ export default function App() {
                 stage={stage}
                 error={analysisError}
                 apiBase={API_BASE}
+                activeReport={activeReport}
+                onLoadExisting={handleLoadReport}
               />
               {activeReport && !analysing && (
                 <Report

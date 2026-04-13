@@ -16,7 +16,7 @@ export function useAnalysis(apiBase) {
       setStage('connecting')
       setError(null)
 
-      const wsUrl = apiBase.replace('https', 'wss').replace('http', 'ws') + '/ws/analyse'
+      const wsUrl = apiBase.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws/analyse'
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
