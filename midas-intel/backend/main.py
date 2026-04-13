@@ -769,18 +769,30 @@ Active Officers:
         return "", 0
 
 
-def lookup_linkedin_company(company_name):
+def lookup_linkedin_company(company_name, domain=""):
     try:
         results = []
+        # Include domain to anchor to the right company
         queries = [
             f'site:linkedin.com/company "{company_name}" employees',
-            f'"{company_name}" "employees" "LinkedIn"',
+            f'"{company_name}" "{domain}" "employees" LinkedIn',
             f'"{company_name}" "company size"',
         ]
         for query in queries:
             results.extend(serpapi_search(query, num_results=6))
+
+        # Filter results: prefer those that mention the domain or exact company name
         text = format_serpapi_results(results, max_chars=5000)
-        employee_signal = extract_employee_count_from_text(text)
+
+        # Extract employee count, but validate it against the domain
+        # If we have domain-specific results, only extract from those
+        domain_results = [r for r in results if domain and domain in str(r).lower()]
+        if domain_results:
+            domain_text = format_serpapi_results(domain_results, max_chars=3000)
+            employee_signal = extract_employee_count_from_text(domain_text)
+        else:
+            employee_signal = extract_employee_count_from_text(text)
+
         return text, employee_signal
     except:
         return "", ""
@@ -788,14 +800,27 @@ def lookup_linkedin_company(company_name):
 
 def lookup_glassdoor(company_name, domain):
     try:
+        # Include domain to avoid matching wrong companies with similar names
         all_text = format_serpapi_results(
-            serpapi_search(f'glassdoor "{company_name}" reviews engineers', num_results=10),
+            serpapi_search(f'glassdoor "{company_name}" "{domain}" reviews', num_results=10),
             max_chars=2000
         )
         all_text += "\n\n" + format_serpapi_results(
-            serpapi_search(f'"{company_name}" employees size glassdoor linkedin indeed', num_results=10),
+            serpapi_search(f'"{company_name}" "{domain}" employees size', num_results=10),
             max_chars=2000
         )
+
+        # Fallback without domain if nothing found
+        if len(all_text.strip()) < 100:
+            all_text = format_serpapi_results(
+                serpapi_search(f'glassdoor "{company_name}" reviews engineers', num_results=10),
+                max_chars=2000
+            )
+            all_text += "\n\n" + format_serpapi_results(
+                serpapi_search(f'"{company_name}" employees size glassdoor linkedin indeed', num_results=10),
+                max_chars=2000
+            )
+
         return all_text[:5000], all_text.lower().count("glassdoor")
     except:
         return "", 0
@@ -921,7 +946,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
         # Start enrichment lookups immediately using quick name (don't wait for DeepSeek)
         lookup_jobs = {
             "company_registry": (lookup_companies_house, (_quick_name,), {"locations": []}),
-            "linkedin": (lookup_linkedin_company, (_quick_name,), {}),
+            "linkedin": (lookup_linkedin_company, (_quick_name,), {"domain": _domain}),
             "reviews": (lookup_glassdoor, (_quick_name, _domain), {}),
             "planning": (lookup_planning_portal, (_quick_name,), {}),
         }
