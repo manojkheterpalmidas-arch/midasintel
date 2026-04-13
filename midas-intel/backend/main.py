@@ -812,10 +812,65 @@ def lookup_planning_portal(company_name):
         return "", 0
 
 
+# ── FAST SUPPLEMENT ANALYSIS (replaces full re-analysis) ─────────
+
+def analyze_supplement(extra_corpus, existing_people_count, existing_projects_count):
+    """Small targeted AI call — only extracts people/projects from enrichment sources.
+    Much faster than re-running the full analyze_company on the entire corpus."""
+    if not extra_corpus.strip():
+        return "{}"
+    return ask_deepseek(
+        "You are a B2B sales analyst. Extract ONLY new people and projects from these supplementary sources. Respond in pure JSON, no markdown. Keep names exactly as written.",
+        f"""These are supplementary data sources (LinkedIn, Companies House, Glassdoor, planning records).
+I already have {existing_people_count} people and {existing_projects_count} projects from the main website.
+Extract ONLY additional people and projects NOT already covered.
+
+Return ONLY valid JSON:
+{{
+  "people": [{{"name": "Full Name", "role": "Job Title", "tier": "Owner|Founder|Director|Principal|Senior|Engineer|Graduate|Technician|Other"}}],
+  "projects": [{{"name": "Project name", "type": "Bridge|Building|Metro|Infrastructure|Residential|Industrial|Other", "location": "City or null", "client": "Client name or null", "description": "One sentence summary", "fem_relevant": true}}],
+  "locations": ["additional office cities found"],
+  "founded": "year if found, else null",
+  "employee_count": "string if found, else null"
+}}
+
+Supplementary sources:
+{extra_corpus[:12000]}""",
+        max_tokens=4000
+    )
+
+
+def quick_extract_company_name(pages, domain):
+    """Fast extraction of company name from page title/content without AI.
+    Used to start enrichment lookups immediately while AI analysis runs."""
+    for p in pages[:3]:
+        md = p.get("markdown", "")
+        # Try first heading
+        for line in md.split("\n")[:20]:
+            line = line.strip().strip("#").strip()
+            if 10 < len(line) < 80 and not line.startswith("[") and not line.startswith("http"):
+                # Clean up common suffixes
+                for suffix in [" - Home", " | Home", " – Home", " - Welcome", " | Welcome"]:
+                    if line.endswith(suffix):
+                        line = line[:-len(suffix)].strip()
+                if line:
+                    return line
+    # Fallback: capitalize the domain name
+    name = domain.split(".")[0].replace("-", " ").replace("_", " ")
+    return name.title()
+
+
 # ── FULL ANALYSIS PIPELINE ───────────────────────────────────────────────────
 
 def analyse_single_url(website_url, firecrawl_key, status_callback=None):
-    """Run full analysis pipeline for one URL. Returns (entry_dict, error_str)."""
+    """Run full analysis pipeline for one URL. Returns (entry_dict, error_str).
+    
+    Optimised pipeline (parallel where possible):
+      1. Crawl website
+      2. IN PARALLEL: AI analysis + enrichment lookups (enrichment uses quick name extraction)
+      3. Small supplement AI call for enrichment gaps (NOT a full re-analysis)
+      4. Sales strategy AI call
+    """
     try:
         if not website_url.startswith("http"):
             website_url = "https://" + website_url
@@ -825,7 +880,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
         if status_callback:
             status_callback("crawling", f"Crawling {_domain}...", 5)
 
-        # Crawl
+        # ── STEP 1: Crawl ──
         pages = firecrawl_crawl(website_url, firecrawl_key)
 
         def _is_thin(pl):
@@ -859,48 +914,58 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
         if status_callback:
             status_callback("analysing", f"Analysing {_domain}...", 30)
 
+        # ── STEP 2: AI analysis + enrichment IN PARALLEL ──
         corpus = build_corpus(pages)
-        company_raw = analyze_company(corpus)
-        _company_data = safe_json(company_raw)
+        _quick_name = quick_extract_company_name(pages, _domain)
 
-        if status_callback:
-            status_callback("enriching", f"Enriching {_domain}...", 55)
-
-        _company_name = _company_data.get("company_name", "")
-        _extra_corpus = ""
-
-        # Parallel enrichment lookups
+        # Start enrichment lookups immediately using quick name (don't wait for DeepSeek)
         lookup_jobs = {
-            "company_registry": (lookup_companies_house, (_company_name,), {"locations": _company_data.get("locations", [])}),
-            "linkedin": (lookup_linkedin_company, (_company_name,), {}),
-            "reviews": (lookup_glassdoor, (_company_name, _domain), {}),
-            "planning": (lookup_planning_portal, (_company_name,), {}),
+            "company_registry": (lookup_companies_house, (_quick_name,), {"locations": []}),
+            "linkedin": (lookup_linkedin_company, (_quick_name,), {}),
+            "reviews": (lookup_glassdoor, (_quick_name, _domain), {}),
+            "planning": (lookup_planning_portal, (_quick_name,), {}),
         }
-        _lookup_results = {}
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future_map = {
+
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            # Submit enrichment lookups
+            enrichment_futures = {
                 executor.submit(func, *args, **kwargs): name
                 for name, (func, args, kwargs) in lookup_jobs.items()
             }
-            for future in as_completed(future_map):
-                name = future_map[future]
+
+            # Submit AI analysis in the SAME pool — runs concurrently with enrichment
+            ai_future = executor.submit(analyze_company, corpus)
+
+            # Collect enrichment results as they complete
+            _lookup_results = {}
+            for future in as_completed(enrichment_futures):
+                name = enrichment_futures[future]
                 try:
                     _lookup_results[name] = future.result()
                 except:
                     _lookup_results[name] = ("", 0)
 
+            # Get AI result (may already be done by now)
+            company_raw = ai_future.result()
+
+        _company_data = safe_json(company_raw)
+
+        if status_callback:
+            status_callback("enriching", f"Merging enrichment data...", 60)
+
+        # ── STEP 3: Merge enrichment + targeted supplement ──
+        _extra_corpus = ""
+
         ch_text, ch_dirs = _lookup_results.get("company_registry", ("", 0))
         if ch_text:
             _extra_corpus += f"\n\n[SOURCE: Company Registry]\n{ch_text}"
 
-        # Track whether employee_count came from a structured/reliable source
         _emp_from_structured = False
 
         li_text, li_emp = _lookup_results.get("linkedin", ("", ""))
         if li_text:
             _extra_corpus += f"\n\n[SOURCE: LinkedIn]\n{li_text}"
             if li_emp:
-                # LinkedIn is the most reliable source — always prefer it
                 _company_data["employee_count"] = li_emp
                 _emp_from_structured = True
 
@@ -909,7 +974,6 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
         if gd_text:
             _extra_corpus += f"\n\n[SOURCE: Glassdoor & Indeed]\n{gd_text}"
         if gd_emp and not _emp_from_structured:
-            # Glassdoor is second most reliable — use if LinkedIn didn't have it
             _company_data["employee_count"] = gd_emp
             _emp_from_structured = True
 
@@ -917,34 +981,61 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
         if pp_text:
             _extra_corpus += f"\n\n[SOURCE: Planning Portal]\n{pp_text}"
 
-        # People fallback
+        # People fallback via SerpAPI (only if website had none)
         if len(_company_data.get("people", [])) == 0:
-            people_text = search_people_via_serpapi(_company_name, _domain)
+            people_text = search_people_via_serpapi(
+                _company_data.get("company_name", _quick_name), _domain
+            )
             if people_text:
                 _extra_corpus += f"\n\n[SOURCE: People Search]\n{people_text}"
 
-        if status_callback:
-            status_callback("enriching", f"Re-analysing with enriched data...", 70)
-
-        # Re-analyse with enriched corpus
+        # Instead of full re-analysis, do a SMALL targeted supplement call
+        # This is ~3x faster than running analyze_company again on the full corpus
         if _extra_corpus:
-            enriched = corpus + _extra_corpus[:20000]
-            company_raw2 = analyze_company(enriched)
-            _company_data2 = safe_json(company_raw2)
-            # Merge fields where re-analysis found more data — but NEVER let
-            # DeepSeek overwrite employee_count if we got it from a structured source
-            for key in ["people", "projects", "locations", "founded"]:
-                if _company_data2.get(key) and len(str(_company_data2.get(key))) > len(str(_company_data.get(key, ""))):
-                    _company_data[key] = _company_data2[key]
-            # Only use DeepSeek's employee_count if no structured source provided one
-            if not _emp_from_structured and _company_data2.get("employee_count"):
-                _company_data["employee_count"] = _company_data2["employee_count"]
+            existing_people = len(_company_data.get("people", []))
+            existing_projects = len(_company_data.get("projects", []))
+
+            # Only run supplement if there are actual gaps to fill
+            needs_supplement = (existing_people < 3) or (existing_projects < 2)
+
+            if needs_supplement:
+                if status_callback:
+                    status_callback("enriching", f"Extracting additional data...", 70)
+
+                supplement_raw = analyze_supplement(
+                    _extra_corpus, existing_people, existing_projects
+                )
+                supplement = safe_json(supplement_raw)
+
+                # Merge supplement people (deduplicate by name)
+                if supplement.get("people"):
+                    existing_names = {p.get("name", "").lower() for p in _company_data.get("people", [])}
+                    for p in supplement["people"]:
+                        if p.get("name", "").lower() not in existing_names:
+                            _company_data.setdefault("people", []).append(p)
+                            existing_names.add(p["name"].lower())
+
+                # Merge supplement projects (deduplicate by name)
+                if supplement.get("projects"):
+                    existing_proj_names = {p.get("name", "").lower() for p in _company_data.get("projects", [])}
+                    for p in supplement["projects"]:
+                        if p.get("name", "").lower() not in existing_proj_names:
+                            _company_data.setdefault("projects", []).append(p)
+
+                # Fill gaps only
+                if supplement.get("locations") and not _company_data.get("locations"):
+                    _company_data["locations"] = supplement["locations"]
+                if supplement.get("founded") and not _company_data.get("founded"):
+                    _company_data["founded"] = supplement["founded"]
+                if not _emp_from_structured and supplement.get("employee_count"):
+                    _company_data["employee_count"] = supplement["employee_count"]
 
         if not _company_data.get("employee_count"):
             fb_emp = extract_employee_count_from_text(_extra_corpus)
             if fb_emp:
                 _company_data["employee_count"] = fb_emp
 
+        # ── STEP 4: Sales strategy ──
         if status_callback:
             status_callback("strategy", f"Building sales strategy...", 85)
 
