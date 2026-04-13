@@ -489,6 +489,20 @@ html, body, #root {
 .batch-stat-num.red { color: var(--red); }
 .batch-stat-label { font-size: 11px; color: var(--muted); }
 
+.batch-disconnected {
+  padding: 14px 18px;
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-left: 3px solid var(--amber); border-radius: var(--radius);
+  font-size: 13px; color: #92400e; line-height: 1.6;
+}
+
+.resume-btn {
+  background: var(--amber) !important; color: white !important;
+}
+.resume-btn:hover:not(:disabled) {
+  background: #b45309 !important;
+}
+
 /* ── API KEY GATE ────────────────────────────────────────────────── */
 
 .gate-screen {
