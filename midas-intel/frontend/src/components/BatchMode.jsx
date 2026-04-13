@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 
 const SCORE_EMOJI = { Hot: '🔥', Warm: '⚡', Cold: '❄️' }
 
@@ -12,28 +12,38 @@ export function BatchMode({ apiBase, onComplete }) {
   const [currentMessage, setCurrentMessage] = useState('')
   const [results, setResults] = useState([])
   const [summary, setSummary] = useState(null)
+  const [disconnected, setDisconnected] = useState(false)
   const wsRef = useRef(null)
+  const allUrlsRef = useRef([])
+  const completedDomainsRef = useRef(new Set())
 
-  const handleRun = () => {
-    const lines = urls.split('\n').map(l => l.trim()).filter(Boolean)
-    if (lines.length === 0) return
+  const startBatch = useCallback((urlLines, isResume = false) => {
+    if (urlLines.length === 0) return
 
     setRunning(true)
     runningRef.current = true
-    setProgress(0)
-    setResults([])
-    setSummary(null)
+    setDisconnected(false)
+    if (!isResume) {
+      setProgress(0)
+      setResults([])
+      setSummary(null)
+      completedDomainsRef.current = new Set()
+      allUrlsRef.current = urlLines
+    }
 
     const wsUrl = apiBase.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws/batch'
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ urls: lines, recrawl }))
+      ws.send(JSON.stringify({ urls: urlLines, recrawl }))
     }
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
+
+      // Ignore heartbeat pings from backend
+      if (msg.type === 'heartbeat') return
 
       if (msg.type === 'batch_start') {
         // total count
@@ -44,7 +54,11 @@ export function BatchMode({ apiBase, onComplete }) {
       } else if (msg.type === 'batch_item') {
         setResults(prev => [...prev, msg])
         setProgress(msg.progress)
-        // Refresh sidebar after each company so results appear immediately
+        // Track completed domains for resume
+        if (msg.domain) {
+          completedDomainsRef.current.add(msg.domain)
+        }
+        // Refresh sidebar after each completed company
         if (msg.status === 'done') {
           onComplete()
         }
@@ -63,18 +77,47 @@ export function BatchMode({ apiBase, onComplete }) {
     }
 
     ws.onerror = () => {
-      setRunning(false)
-      runningRef.current = false
-      onComplete()
+      if (runningRef.current) {
+        setDisconnected(true)
+        setRunning(false)
+        runningRef.current = false
+        setCurrentMessage('Connection lost — click Resume to continue')
+        onComplete()
+      }
     }
 
     ws.onclose = () => {
-      // Safety net — if WS closes unexpectedly, still refresh sidebar
       if (runningRef.current) {
+        setDisconnected(true)
         setRunning(false)
         runningRef.current = false
+        setCurrentMessage('Connection lost — click Resume to continue')
         onComplete()
       }
+    }
+  }, [apiBase, recrawl, onComplete])
+
+  const handleRun = () => {
+    const lines = urls.split('\n').map(l => l.trim()).filter(Boolean)
+    startBatch(lines)
+  }
+
+  const handleResume = () => {
+    // Filter out already-completed URLs
+    const remaining = allUrlsRef.current.filter(u => {
+      try {
+        const d = new URL(u.startsWith('http') ? u : `https://${u}`).hostname.replace('www.', '')
+        return !completedDomainsRef.current.has(d)
+      } catch {
+        return true
+      }
+    })
+    if (remaining.length > 0) {
+      setDisconnected(false)
+      startBatch(remaining, true)
+    } else {
+      setDisconnected(false)
+      setCurrentMessage('All companies already processed')
     }
   }
 
@@ -101,11 +144,23 @@ export function BatchMode({ apiBase, onComplete }) {
         <button className="action-btn" onClick={handleRun} disabled={running || !urls.trim()}>
           {running ? 'Running...' : '🚀 Run batch'}
         </button>
+        {disconnected && (
+          <button className="action-btn resume-btn" onClick={handleResume}>
+            🔄 Resume ({allUrlsRef.current.length - completedDomainsRef.current.size} remaining)
+          </button>
+        )}
         <label className="batch-checkbox">
           <input type="checkbox" checked={recrawl} onChange={(e) => setRecrawl(e.target.checked)} />
           Re-crawl all
         </label>
       </div>
+
+      {disconnected && (
+        <div className="batch-disconnected mt-md">
+          Connection lost after {completedDomainsRef.current.size} companies.
+          Results saved so far are in the sidebar. Click Resume to continue with the remaining companies.
+        </div>
+      )}
 
       {running && (
         <div className="progress-section mt-md">
