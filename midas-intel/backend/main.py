@@ -195,9 +195,14 @@ def extract_locations_from_text(text):
     locations = []
     seen = set()
     location_stopwords = {
-        "the", "this", "that", "these", "those", "and", "or", "to", "from", "in",
+        "a", "an", "the", "this", "that", "these", "those", "and", "or", "to", "from", "in",
         "on", "at", "of", "for", "with", "including", "include", "set",
     }
+    junk_location_terms = (
+        r"set to", r"companies house", r"include", r"company", r"officer",
+        r"appointed", r"registered", r"jurisdiction", r"courts?", r"certification",
+        r"exclusive", r"terms", r"privacy", r"policy", r"cookies?", r"training",
+    )
 
     def add_location(value):
         value = re.sub(r"\s+", " ", value or "").strip(" ,.-")
@@ -206,9 +211,12 @@ def extract_locations_from_text(text):
         first_token = re.split(r"[\s,]+", value.lower(), maxsplit=1)[0]
         if first_token in location_stopwords:
             return
-        if re.search(r"\b(set to|companies house|include|company|officer|appointed|registered)\b", value, re.IGNORECASE):
+        if re.search(r"\b(" + "|".join(junk_location_terms) + r")\b", value, re.IGNORECASE):
             return
         if value.lower().startswith(("the ", "to ", "and ", "or ")):
+            return
+        first_part = value.split(",", 1)[0].strip()
+        if len(first_part.split()) > 3:
             return
         key = value.lower()
         if key not in seen:
@@ -262,23 +270,22 @@ def extract_locations_from_text(text):
         else:
             add_location(f"{town}, United Kingdom")
 
-    city_country_pattern = re.compile(
-        r"\b([A-Z][A-Za-z' .-]{2,40})\s*,?\s+(United Kingdom|UK|England|Scotland|Wales)\b",
-        re.IGNORECASE,
-    )
-    for match in city_country_pattern.finditer(normalized):
-        city = match.group(1).strip()
-        if city.lower() in location_stopwords:
-            continue
-        if len(city.split()) <= 4 and not re.search(r"\b(road|street|lane|email|phone|welcome)\b", city, re.IGNORECASE):
-            add_location(f"{city.title()}, United Kingdom")
-
     return locations[:5]
+
+def direct_homepage_text(url):
+    try:
+        resp = http.get(url, headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "en-GB,en;q=0.9"}, timeout=12)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "noscript", "iframe"]):
+            tag.decompose()
+        return soup.get_text(separator="\n", strip=True)
+    except:
+        return ""
 
 def clean_locations(locations):
     cleaned = []
     seen = set()
-    location_stopwords = {"the", "this", "that", "these", "those", "and", "or", "to", "from", "in", "on", "at", "of", "for", "with"}
+    location_stopwords = {"a", "an", "the", "this", "that", "these", "those", "and", "or", "to", "from", "in", "on", "at", "of", "for", "with"}
     for loc in locations or []:
         value = re.sub(r"\s+", " ", str(loc or "")).strip(" ,.-")
         if not value:
@@ -286,11 +293,14 @@ def clean_locations(locations):
         first_token = re.split(r"[\s,]+", value.lower(), maxsplit=1)[0]
         if first_token in location_stopwords:
             continue
-        if re.search(r"\b(set to|companies house|include|company|officer|appointed|registered)\b", value, re.IGNORECASE):
+        if re.search(r"\b(set to|companies house|include|company|officer|appointed|registered|jurisdiction|courts?|certification|exclusive|terms|privacy|policy|cookies?|training)\b", value, re.IGNORECASE):
             continue
         if value.lower().startswith(("the ", "to ", "and ", "or ")):
             continue
         if len(value) > 80:
+            continue
+        first_part = value.split(",", 1)[0].strip()
+        if len(first_part.split()) > 3:
             continue
         key = value.lower()
         if key not in seen:
@@ -1715,6 +1725,8 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None, should_
 
         _company_data["locations"] = clean_locations(_company_data.get("locations", []))
         site_locations = clean_locations(extract_locations_from_text(raw_site_text or corpus))
+        if not site_locations:
+            site_locations = clean_locations(extract_locations_from_text(direct_homepage_text(website_url)))
         if site_locations:
             _company_data["locations"] = site_locations
         else:
