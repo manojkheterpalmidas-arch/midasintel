@@ -6,7 +6,7 @@ export function useHistory(apiBase) {
   const fetchHistory = useCallback(async (search = '') => {
     try {
       const params = search ? `?search=${encodeURIComponent(search)}` : ''
-      const res = await fetch(`${apiBase}/api/history${params}`)
+      const res = await fetch(`${apiBase}/api/history${params}`, { cache: 'no-store' })
       const data = await res.json()
       setHistory(data.history || [])
     } catch (e) {
@@ -24,7 +24,7 @@ export function useHistory(apiBase) {
 
   const deleteFromHistory = useCallback(async (domain) => {
     try {
-      await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`, { method: 'DELETE' })
+      await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`, { method: 'DELETE', cache: 'no-store' })
       setHistory(prev => prev.filter(h => h.domain !== domain))
     } catch (e) {
       console.error('Failed to delete:', e)
