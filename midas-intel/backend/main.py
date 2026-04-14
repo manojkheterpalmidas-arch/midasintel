@@ -748,7 +748,6 @@ MIDAS NX Suite provides a complete structural and geotechnical engineering ecosy
 """
 
 
-
 def analyze_sales(corpus, company_json):
     return ask_deepseek(
         f"You are a senior B2B sales strategist for MIDAS IT. Use the product knowledge below. Be specific and actionable. Respond in pure JSON, no markdown. Always respond in English.\n\n{MIDAS_PRODUCTS}",
@@ -775,7 +774,7 @@ def analyze_sales(corpus, company_json):
   "overall_score": "Hot|Warm|Cold",
   "score_reason": "2-3 sentence reason for the score",
   "recommended_products": ["CIVIL NX", "GEN NX", "FEA NX", "GTS NX"],
-  "product_reason": "1-2 sentences for each product with explanation of why this products fits"
+  "product_reason": "1-2 sentences for each product with explanation of why this product fits"
 }}
 
 LEAD SCORING SYSTEM (0-100) — score each category independently then sum:
@@ -1589,7 +1588,9 @@ def export_csv_route():
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "Company","Domain","Score","Score Reason","Date Analysed","Pages Crawled",
+        "Company","Domain","Lead Score","Score Label","Score Reason",
+        "Structural Relevance (/30)","FEM Need (/25)","Buying Signals (/20)","Accessibility (/15)","Competitive Landscape (/10)",
+        "Date Analysed","Pages Crawled",
         "Locations","Employee Count","Founded","Confidence","Confidence Reason",
         "Engineering Capabilities","Project Types","Software Mentioned",
         "FEM Opportunities","Pain Points","Entry Point","Value Positioning",
@@ -1600,9 +1601,14 @@ def export_csv_route():
     for h in all_history:
         cd = h.get("company_data", {}) or {}
         sd = h.get("sales_data", {}) or {}
+        sb = sd.get("score_breakdown", {}) or {}
         writer.writerow([
-            h.get("company",""), h.get("domain",""), h.get("score",""),
-            sd.get("score_reason",""), h.get("date",""), h.get("pages_count",""),
+            h.get("company",""), h.get("domain",""),
+            sd.get("lead_score", h.get("lead_score", "")),
+            h.get("score",""),
+            sd.get("score_reason",""),
+            sb.get("structural_relevance",""), sb.get("fem_need",""), sb.get("buying_signals",""), sb.get("accessibility",""), sb.get("competitive_landscape",""),
+            h.get("date",""), h.get("pages_count",""),
             " | ".join(cd.get("locations",[])), cd.get("employee_count",""),
             cd.get("founded",""), cd.get("confidence",""), cd.get("confidence_reason",""),
             " | ".join(cd.get("engineering_capabilities",[])),
