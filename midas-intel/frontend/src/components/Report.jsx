@@ -245,11 +245,11 @@ function StrategyTab({ sd }) {
             <div className="score-display">
               <div className="score-big">{leadScore}<span className="score-max">/100</span></div>
               <div className="score-bars">
-                <ScoreBar label="Structural relevance" value={breakdown.structural_relevance} max={30} />
-                <ScoreBar label="FEM/FEA need" value={breakdown.fem_need} max={25} />
-                <ScoreBar label="Buying signals" value={breakdown.buying_signals} max={20} />
-                <ScoreBar label="Accessibility" value={breakdown.accessibility} max={15} />
-                <ScoreBar label="Competitive landscape" value={breakdown.competitive_landscape} max={10} />
+                <ScoreBar label="Structural relevance" data={breakdown.structural_relevance} max={30} />
+                <ScoreBar label="FEM/FEA need" data={breakdown.fem_need} max={25} />
+                <ScoreBar label="Buying signals" data={breakdown.buying_signals} max={20} />
+                <ScoreBar label="Accessibility" data={breakdown.accessibility} max={15} />
+                <ScoreBar label="Competitive landscape" data={breakdown.competitive_landscape} max={10} />
               </div>
             </div>
           </>
@@ -299,17 +299,20 @@ function StrategyTab({ sd }) {
   )
 }
 
-function ScoreBar({ label, value, max }) {
-  const num = typeof value === 'number' ? value : 0
+function ScoreBar({ label, data, max }) {
+  // Handle both old format (number) and new format ({score, reason})
+  const num = typeof data === 'number' ? data : (typeof data === 'object' && data !== null ? (data.score ?? 0) : 0)
+  const reason = typeof data === 'object' && data !== null ? data.reason : null
   const pct = max > 0 ? (num / max) * 100 : 0
   const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)'
   return (
-    <div className="score-bar-row">
+    <div className="score-bar-row" title={reason || ''}>
       <span className="score-bar-label">{label}</span>
       <div className="score-bar-track">
         <div className="score-bar-fill" style={{ width: `${pct}%`, background: color }} />
       </div>
       <span className="score-bar-value">{num}/{max}</span>
+      {reason && <div className="score-bar-reason">{reason}</div>}
     </div>
   )
 }
