@@ -8,6 +8,15 @@ import { useAnalysis } from './hooks/useAnalysis'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+function extractDomain(url) {
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`)
+    return parsed.hostname.replace('www.', '')
+  } catch {
+    return ''
+  }
+}
+
 export default function App() {
   const [mode, setMode] = useState('single')
   const [activeReport, setActiveReport] = useState(null)
@@ -36,7 +45,11 @@ export default function App() {
 
   const handleAnalyse = async (url) => {
     const seq = ++analysisSeq.current
+    const domain = extractDomain(url)
     setActiveReport(null)
+    if (domain) {
+      await deleteFromHistory(domain)
+    }
     const result = await startAnalysis(url)
     if (result && seq === analysisSeq.current) {
       setActiveReport(result)
