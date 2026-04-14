@@ -216,6 +216,23 @@ def extract_locations_from_text(text):
             locations.append(value)
 
     uk_postcode = r"[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}"
+    address_lines = [line.strip() for line in re.split(r"[\r\n]+", text) if line.strip()]
+    for idx, line in enumerate(address_lines):
+        if not re.search(uk_postcode, line, re.IGNORECASE):
+            continue
+        window = " ".join(address_lines[max(0, idx - 3):idx + 1])
+        line_match = re.search(
+            rf"\b([A-Za-z' .-]{{2,35}})\s+([A-Za-z' .-]{{2,35}})\s+"
+            rf"(?:United Kingdom|UK|England|Scotland|Wales)\s*{uk_postcode}",
+            window,
+            re.IGNORECASE,
+        )
+        if line_match:
+            town = line_match.group(1).strip().title()
+            county = line_match.group(2).strip().title()
+            if not re.search(r"\b(road|street|lane|avenue|drive|close|way|place|park|court|yard)\b", town, re.IGNORECASE):
+                add_location(f"{town}, {county}, United Kingdom")
+
     uk_street_address_pattern = re.compile(
         rf"\d{{1,5}}\s+[A-Za-z0-9' .-]+?\b(?:road|street|lane|avenue|drive|close|way|place|park|court|yard)\b\s+"
         rf"([A-Za-z' .-]{{2,35}}?)\s+"
@@ -1557,6 +1574,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None, should_
             status_callback("analysing", f"Analysing {_domain}...", 30)
 
         # ── STEP 2: AI analysis + enrichment IN PARALLEL ──
+        raw_site_text = "\n".join((p.get("markdown", "") or "") for p in pages)
         corpus = build_corpus(pages)
         _quick_name = quick_extract_company_name(pages, _domain)
 
@@ -1696,7 +1714,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None, should_
             _company_data["employee_count"] = ""
 
         _company_data["locations"] = clean_locations(_company_data.get("locations", []))
-        site_locations = clean_locations(extract_locations_from_text(corpus))
+        site_locations = clean_locations(extract_locations_from_text(raw_site_text or corpus))
         if site_locations:
             _company_data["locations"] = site_locations
         else:
