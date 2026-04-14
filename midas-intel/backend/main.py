@@ -10,6 +10,7 @@ import csv
 import json
 import time
 import asyncio
+import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1958,14 +1959,17 @@ def export_csv_route():
 
 from threading import Lock
 
-_jobs = {}  # domain -> {status, stage, message, progress, result, error}
+_jobs = {}  # domain -> {job_id, status, stage, message, progress, result, error}
 _jobs_lock = Lock()
 
-def _update_job(domain, **kwargs):
+def _update_job(domain, job_id=None, **kwargs):
     with _jobs_lock:
         if domain not in _jobs:
             _jobs[domain] = {}
+        if job_id is not None and _jobs[domain].get("job_id") != job_id:
+            return False
         _jobs[domain].update(kwargs)
+        return True
 
 def _get_job(domain):
     with _jobs_lock:
@@ -1988,25 +1992,26 @@ def start_analysis(req: AnalyseRequest):
     # Check if already running
     existing_job = _get_job(domain)
     if existing_job.get("status") == "running":
-        return {"status": "already_running", "domain": domain}
+        return {"status": "already_running", "domain": domain, "job_id": existing_job.get("job_id")}
 
-    _update_job(domain, status="running", stage="starting", message="Starting...", progress=0, result=None, error=None)
+    job_id = uuid.uuid4().hex
+    _update_job(domain, job_id=job_id, status="running", stage="starting", message="Starting...", progress=0, result=None, error=None)
 
     def run_in_background():
         def status_callback(stage, message, progress):
-            _update_job(domain, stage=stage, message=message, progress=progress)
+            _update_job(domain, job_id=job_id, stage=stage, message=message, progress=progress)
 
         entry, err = analyse_single_url(url, FIRECRAWL_KEY, status_callback=status_callback)
         if entry:
-            _update_job(domain, status="complete", progress=100, message="Done!", result=entry, error=None)
+            _update_job(domain, job_id=job_id, status="complete", progress=100, message="Done!", result=entry, error=None)
         else:
-            _update_job(domain, status="error", message=err or "Unknown error", error=err)
+            _update_job(domain, job_id=job_id, status="error", message=err or "Unknown error", error=err)
 
     import threading
     t = threading.Thread(target=run_in_background, daemon=True)
     t.start()
 
-    return {"status": "started", "domain": domain}
+    return {"status": "started", "domain": domain, "job_id": job_id}
 
 
 @app.get("/api/jobs/{domain}")
