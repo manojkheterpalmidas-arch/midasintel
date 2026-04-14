@@ -19,7 +19,6 @@ export function useAnalysis(apiBase) {
     notFoundCount.current = 0
 
     try {
-      // Start the analysis job via REST
       const res = await fetch(`${apiBase}/api/analyse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,8 +35,8 @@ export function useAnalysis(apiBase) {
       }
 
       const domain = data.domain
+      const jobId = data.job_id
 
-      // Poll for progress until complete
       while (pollingRef.current) {
         await new Promise(r => setTimeout(r, 1500))
         if (!pollingRef.current) break
@@ -45,6 +44,11 @@ export function useAnalysis(apiBase) {
         try {
           const pollRes = await fetch(`${apiBase}/api/jobs/${encodeURIComponent(domain)}`)
           const job = await pollRes.json()
+
+          if (jobId && job.job_id && job.job_id !== jobId) {
+            setProgressMessage('Waiting for fresh re-crawl...')
+            continue
+          }
 
           if (job.status === 'running') {
             notFoundCount.current = 0
@@ -58,23 +62,13 @@ export function useAnalysis(apiBase) {
             setStage('complete')
             pollingRef.current = false
 
-            // Use the job result DIRECTLY — it's always the fresh result
             if (job.result) {
               setAnalysing(false)
               return job.result
             }
 
-            // Fallback: job says complete but no result attached (shouldn't happen)
-            // Wait a moment then check history
-            await new Promise(r => setTimeout(r, 1000))
-            const reportRes = await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`)
-            if (reportRes.ok) {
-              const report = await reportRes.json()
-              setAnalysing(false)
-              return report
-            }
             setAnalysing(false)
-            setError('Analysis completed but report not found')
+            setError('Analysis completed but fresh report was not returned')
             return null
 
           } else if (job.status === 'error') {
@@ -85,39 +79,19 @@ export function useAnalysis(apiBase) {
             return null
 
           } else if (job.status === 'not_found') {
-            // Job not in tracker — could be server restart or hasn't registered yet
             notFoundCount.current += 1
 
-            // Give it a few tries (job might not have registered yet)
-            if (notFoundCount.current <= 5) {
-              setProgressMessage('Waiting for analysis to start...')
+            if (notFoundCount.current <= 10) {
+              setProgressMessage('Waiting for fresh re-crawl...')
               continue
             }
 
-            // After 5 "not found" polls, check if result landed in history
-            const reportRes = await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`)
-            if (reportRes.ok) {
-              const report = await reportRes.json()
-              // Only accept it if it was analysed recently (within last 2 minutes)
-              const reportDate = report.date || ''
-              if (reportDate) {
-                setAnalysing(false)
-                setProgress(100)
-                setStage('complete')
-                pollingRef.current = false
-                return report
-              }
-            }
-            // Still nothing — give up
-            if (notFoundCount.current > 10) {
-              setAnalysing(false)
-              setError('Analysis job lost. Please try again.')
-              pollingRef.current = false
-              return null
-            }
+            setAnalysing(false)
+            setError('Fresh re-crawl job was lost. Please try again.')
+            pollingRef.current = false
+            return null
           }
         } catch (pollErr) {
-          // Network error during poll — keep trying
           setProgressMessage('Reconnecting...')
         }
       }
