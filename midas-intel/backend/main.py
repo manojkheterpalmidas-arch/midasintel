@@ -194,10 +194,17 @@ def extract_locations_from_text(text):
     normalized = re.sub(r"\s+", " ", text)
     locations = []
     seen = set()
+    location_stopwords = {
+        "the", "this", "that", "these", "those", "and", "or", "to", "from", "in",
+        "on", "at", "of", "for", "with", "including", "include", "set",
+    }
 
     def add_location(value):
         value = re.sub(r"\s+", " ", value or "").strip(" ,.-")
         if not value:
+            return
+        first_token = re.split(r"[\s,]+", value.lower(), maxsplit=1)[0]
+        if first_token in location_stopwords:
             return
         if re.search(r"\b(set to|companies house|include|company|officer|appointed|registered)\b", value, re.IGNORECASE):
             return
@@ -244,6 +251,8 @@ def extract_locations_from_text(text):
     )
     for match in city_country_pattern.finditer(normalized):
         city = match.group(1).strip()
+        if city.lower() in location_stopwords:
+            continue
         if len(city.split()) <= 4 and not re.search(r"\b(road|street|lane|email|phone|welcome)\b", city, re.IGNORECASE):
             add_location(f"{city.title()}, United Kingdom")
 
@@ -252,9 +261,13 @@ def extract_locations_from_text(text):
 def clean_locations(locations):
     cleaned = []
     seen = set()
+    location_stopwords = {"the", "this", "that", "these", "those", "and", "or", "to", "from", "in", "on", "at", "of", "for", "with"}
     for loc in locations or []:
         value = re.sub(r"\s+", " ", str(loc or "")).strip(" ,.-")
         if not value:
+            continue
+        first_token = re.split(r"[\s,]+", value.lower(), maxsplit=1)[0]
+        if first_token in location_stopwords:
             continue
         if re.search(r"\b(set to|companies house|include|company|officer|appointed|registered)\b", value, re.IGNORECASE):
             continue
