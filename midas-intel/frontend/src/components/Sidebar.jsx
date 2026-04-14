@@ -51,6 +51,7 @@ export function Sidebar({ open, history, activeReport, onLoadReport, onDelete, o
           history.map((h, i) => {
             const sc = SCORE_CONFIG[h.score] || SCORE_CONFIG.Cold
             const isActive = activeReport?.domain === h.domain
+            const leadScore = h.lead_score ?? h.sales_data?.lead_score ?? null
             return (
               <div
                 key={h.domain}
@@ -59,7 +60,10 @@ export function Sidebar({ open, history, activeReport, onLoadReport, onDelete, o
                 <div className="sidebar-item-info" onClick={() => onLoadReport(h)}>
                   <div className="sidebar-item-name">{h.company || h.domain}</div>
                   <div className="sidebar-item-meta">
-                    <span className={`score-badge ${sc.cls}`}>{sc.emoji} {h.score}</span>
+                    <span className={`score-badge ${sc.cls}`}>
+                      {leadScore !== null && <span className="score-num">{leadScore}</span>}
+                      {sc.emoji} {h.score}
+                    </span>
                     <span className="sidebar-item-date">{h.days_ago}</span>
                   </div>
                 </div>
