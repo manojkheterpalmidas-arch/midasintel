@@ -1966,10 +1966,15 @@ def _update_job(domain, job_id=None, **kwargs):
     with _jobs_lock:
         if domain not in _jobs:
             _jobs[domain] = {}
-        if job_id is not None and _jobs[domain].get("job_id") != job_id:
+        current_job_id = _jobs[domain].get("job_id")
+        if job_id is not None and current_job_id is not None and current_job_id != job_id:
             return False
         _jobs[domain].update(kwargs)
         return True
+
+def _start_job(domain, job_id, **kwargs):
+    with _jobs_lock:
+        _jobs[domain] = {"job_id": job_id, **kwargs}
 
 def _get_job(domain):
     with _jobs_lock:
@@ -1989,13 +1994,8 @@ def start_analysis(req: AnalyseRequest):
         url = "https://" + url
     domain = extract_domain(url)
 
-    # Check if already running
-    existing_job = _get_job(domain)
-    if existing_job.get("status") == "running":
-        return {"status": "already_running", "domain": domain, "job_id": existing_job.get("job_id")}
-
     job_id = uuid.uuid4().hex
-    _update_job(domain, job_id=job_id, status="running", stage="starting", message="Starting...", progress=0, result=None, error=None)
+    _start_job(domain, job_id, status="running", stage="starting", message="Starting...", progress=0, result=None, error=None)
 
     def run_in_background():
         def status_callback(stage, message, progress):
