@@ -60,9 +60,15 @@ function safeArr(val) {
   return val.map(item => safeStr(item))
 }
 
-function ScoreBadge({ score }) {
+function ScoreBadge({ score, leadScore }) {
   const sc = SCORE_CONFIG[score] || SCORE_CONFIG.Cold
-  return <span className={`score-badge ${sc.cls}`}>{sc.emoji} {score}</span>
+  const num = typeof leadScore === 'number' ? leadScore : null
+  return (
+    <span className={`score-badge ${sc.cls}`}>
+      {num !== null && <span className="score-num">{num}</span>}
+      {sc.emoji} {score}
+    </span>
+  )
 }
 
 function PillTag({ children, variant = 'default' }) {
@@ -227,9 +233,28 @@ function OpportunitiesTab({ sd }) {
 
 // ── TAB: STRATEGY ──
 function StrategyTab({ sd }) {
+  const breakdown = sd.score_breakdown || {}
+  const leadScore = sd.lead_score ?? null
+
   return (
     <div className="tab-grid">
       <div className="tab-col">
+        {leadScore !== null && (
+          <>
+            <SectionLabel>Lead score</SectionLabel>
+            <div className="score-display">
+              <div className="score-big">{leadScore}<span className="score-max">/100</span></div>
+              <div className="score-bars">
+                <ScoreBar label="Structural relevance" value={breakdown.structural_relevance} max={30} />
+                <ScoreBar label="FEM/FEA need" value={breakdown.fem_need} max={25} />
+                <ScoreBar label="Buying signals" value={breakdown.buying_signals} max={20} />
+                <ScoreBar label="Accessibility" value={breakdown.accessibility} max={15} />
+                <ScoreBar label="Competitive landscape" value={breakdown.competitive_landscape} max={10} />
+              </div>
+            </div>
+          </>
+        )}
+
         <SectionLabel>Entry point</SectionLabel>
         <div className="info-box blue">{safeStr(sd.entry_point) || 'Not determined'}</div>
 
@@ -270,6 +295,21 @@ function StrategyTab({ sd }) {
           </blockquote>
         )}
       </div>
+    </div>
+  )
+}
+
+function ScoreBar({ label, value, max }) {
+  const num = typeof value === 'number' ? value : 0
+  const pct = max > 0 ? (num / max) * 100 : 0
+  const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)'
+  return (
+    <div className="score-bar-row">
+      <span className="score-bar-label">{label}</span>
+      <div className="score-bar-track">
+        <div className="score-bar-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="score-bar-value">{num}/{max}</span>
     </div>
   )
 }
@@ -455,6 +495,7 @@ export function Report({ report, apiBase, firecrawlKey, onRefresh }) {
   const cd = report.company_data || {}
   const sd = report.sales_data || {}
   const score = sd.overall_score || report.score || 'Cold'
+  const leadScore = sd.lead_score ?? report.lead_score ?? null
   const companyName = cd.company_name || report.company || report.domain
 
   const renderTab = () => {
@@ -487,7 +528,7 @@ export function Report({ report, apiBase, firecrawlKey, onRefresh }) {
             </button>
           </div>
           <div className="report-meta">
-            <ScoreBadge score={score} />
+            <ScoreBadge score={score} leadScore={leadScore} />
             {cd.locations?.length > 0 && <span>{cd.locations.join(', ')}</span>}
             {cd.employee_count && <span>{cd.employee_count}</span>}
             {cd.founded && <span>Est. {cd.founded}</span>}
