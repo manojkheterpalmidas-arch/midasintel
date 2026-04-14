@@ -195,6 +195,10 @@ def extract_locations_from_text(text):
         value = re.sub(r"\s+", " ", value or "").strip(" ,.-")
         if not value:
             return
+        if re.search(r"\b(set to|companies house|include|company|officer|appointed|registered)\b", value, re.IGNORECASE):
+            return
+        if value.lower().startswith(("the ", "to ", "and ", "or ")):
+            return
         key = value.lower()
         if key not in seen:
             seen.add(key)
