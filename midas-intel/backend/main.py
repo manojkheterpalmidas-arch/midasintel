@@ -775,7 +775,7 @@ def analyze_sales(corpus, company_json):
   "overall_score": "Hot|Warm|Cold",
   "score_reason": "2-3 sentence reason for the score",
   "recommended_products": ["CIVIL NX", "GEN NX", "FEA NX", "GTS NX"],
-  "product_reason": "3-4 sentence explanation of why these products fit"
+  "product_reason": "1-2 sentences for each product with explanation of why this products fits"
 }}
 
 LEAD SCORING SYSTEM (0-100) — score each category independently then sum:
@@ -824,7 +824,7 @@ If lead_score is below 30, set recommended_products to [] and fem_opportunities 
 
 Company data: {company_json}
 Website excerpt: {corpus[:4000]}""",
-        max_tokens=4000
+        max_tokens=8000
     )
 
 
