@@ -91,6 +91,9 @@ def load_history():
 
 def save_history(entry):
     try:
+        cd = entry.get("company_data", {}) or {}
+        cd["locations"] = clean_locations(cd.get("locations", []))
+        entry["company_data"] = cd
         supabase.table("midas_history").upsert({
             "domain":       entry["domain"],
             "company":      entry["company"],
@@ -102,6 +105,15 @@ def save_history(entry):
         }, on_conflict="domain").execute()
     except Exception as e:
         print(f"Could not save history: {e}")
+
+def sanitize_history_entry(entry):
+    if not entry:
+        return entry
+    cd = entry.get("company_data", {}) or {}
+    if isinstance(cd, dict):
+        cd["locations"] = clean_locations(cd.get("locations", []))
+        entry["company_data"] = cd
+    return entry
 
 def find_in_history(domain):
     try:
@@ -286,6 +298,12 @@ def clean_locations(locations):
     cleaned = []
     seen = set()
     location_stopwords = {"a", "an", "the", "this", "that", "these", "those", "and", "or", "to", "from", "in", "on", "at", "of", "for", "with"}
+    junk_re = re.compile(
+        r"(set\s*to|companies\s*house|include|company|officer|appointed|registered|"
+        r"jurisdiction|jurisdic\s*tion|courts?|certification|exclusive|terms|privacy|"
+        r"policy|cookies?|training|safety\s+certification|tunnelling\s+safety)",
+        re.IGNORECASE,
+    )
     for loc in locations or []:
         value = re.sub(r"\s+", " ", str(loc or "")).strip(" ,.-")
         if not value:
@@ -293,7 +311,7 @@ def clean_locations(locations):
         first_token = re.split(r"[\s,]+", value.lower(), maxsplit=1)[0]
         if first_token in location_stopwords:
             continue
-        if re.search(r"\b(set to|companies house|include|company|officer|appointed|registered|jurisdiction|courts?|certification|exclusive|terms|privacy|policy|cookies?|training)\b", value, re.IGNORECASE):
+        if junk_re.search(value):
             continue
         if value.lower().startswith(("the ", "to ", "and ", "or ")):
             continue
@@ -302,6 +320,18 @@ def clean_locations(locations):
         first_part = value.split(",", 1)[0].strip()
         if len(first_part.split()) > 3:
             continue
+        if re.search(r"\bunited kingdom\b", value, re.IGNORECASE) and not re.search(r"\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b", value, re.IGNORECASE):
+            # Only keep UK country locations when they are a normal city/county label,
+            # not a prose fragment that happened to end near "United Kingdom".
+            allowed_uk_places = {
+                "london", "manchester", "birmingham", "leeds", "bristol", "edinburgh",
+                "glasgow", "liverpool", "tonbridge", "kent", "cardiff", "nottingham",
+                "sheffield", "newcastle", "cambridge", "oxford", "reading", "york",
+            }
+            place_words = {p.strip().lower() for p in re.split(r"[,/]", value) if p.strip()}
+            first_words = set(first_part.lower().split())
+            if not (place_words | first_words) & allowed_uk_places:
+                continue
         key = value.lower()
         if key not in seen:
             seen.add(key)
@@ -1957,6 +1987,7 @@ def get_history(search: Optional[str] = None):
         history = [h for h in history if search_lower in h.get("company","").lower() or search_lower in h.get("domain","").lower()]
     # Add days_ago to each entry
     for h in history:
+        sanitize_history_entry(h)
         h["days_ago"] = days_ago(h.get("date", ""))
     return {"history": history}
 
@@ -1966,6 +1997,7 @@ def get_report(domain: str):
     entry = find_in_history(domain)
     if not entry:
         raise HTTPException(status_code=404, detail="Report not found")
+    sanitize_history_entry(entry)
     entry["days_ago"] = days_ago(entry.get("date", ""))
     return entry
 
