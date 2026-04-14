@@ -568,7 +568,7 @@ def analyze_company(corpus):
 {{
   "company_name": "string",
   "tagline": "string or null",
-  "locations": ["ONLY cities explicitly stated as offices — empty array if none found"],
+  "locations": ["cities where the company has offices or is based — include headquarters, branch offices, and any city mentioned as a company location"],
   "founded": "year or null",
   "employee_count": "string or null",
   "overview": ["bullet 1", "bullet 2", "bullet 3"],
@@ -582,7 +582,7 @@ def analyze_company(corpus):
   "confidence_reason": "One sentence explaining why"
 }}
 Extract ALL people — engineering and technical staff only.
-For locations: ONLY explicitly stated office cities.
+For locations: include any city mentioned as company headquarters, office, or base location — check footer addresses, contact pages, and about sections.
 For employee_count: check ALL sources including Glassdoor, LinkedIn, Companies House.
 For projects: extract ALL completed or ongoing projects mentioned anywhere.
 Website content:
@@ -1096,7 +1096,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
                             _company_data.setdefault("projects", []).append(p)
 
                 # Fill gaps only
-                if supplement.get("locations") and not _company_data.get("locations"):
+                if supplement.get("locations") and not _company_data.get("locations", []):
                     _company_data["locations"] = supplement["locations"]
                 if supplement.get("founded") and not _company_data.get("founded"):
                     _company_data["founded"] = supplement["founded"]
