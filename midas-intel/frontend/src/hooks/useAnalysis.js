@@ -7,6 +7,15 @@ function websocketUrl(apiBase) {
   return base
 }
 
+function extractDomain(url) {
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`)
+    return parsed.hostname.replace('www.', '')
+  } catch {
+    return ''
+  }
+}
+
 export function useAnalysis(apiBase) {
   const [analysing, setAnalysing] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -31,6 +40,23 @@ export function useAnalysis(apiBase) {
       const ws = new WebSocket(`${websocketUrl(apiBase)}/ws/analyse`)
       wsRef.current = ws
       let finished = false
+      let fallbackStarted = false
+      const domain = extractDomain(url)
+
+      const waitForSavedReport = async () => {
+        if (!domain) return null
+        setProgressMessage('Finishing fresh report...')
+        for (let i = 0; i < 80; i += 1) {
+          try {
+            const res = await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`, { cache: 'no-store' })
+            if (res.ok) {
+              return await res.json()
+            }
+          } catch {}
+          await new Promise(r => setTimeout(r, 1500))
+        }
+        return null
+      }
 
       const finish = (result) => {
         if (finished) return
@@ -73,17 +99,29 @@ export function useAnalysis(apiBase) {
         }
       }
 
-      ws.onerror = () => {
+      const handleEarlyClose = async () => {
+        if (finished || fallbackStarted) return
+        fallbackStarted = true
+        const report = await waitForSavedReport()
+        if (report) {
+          setProgress(100)
+          setStage('complete')
+          setProgressMessage('Complete!')
+          finish(report)
+          return
+        }
         setStage('error')
-        setError('Analysis connection failed. Please try again.')
+        setError('Analysis connection closed before completion. Please try again.')
         finish(null)
+      }
+
+      ws.onerror = () => {
+        handleEarlyClose()
       }
 
       ws.onclose = () => {
         if (!finished) {
-          setStage('error')
-          setError('Analysis connection closed before completion. Please try again.')
-          finish(null)
+          handleEarlyClose()
         }
       }
     })
