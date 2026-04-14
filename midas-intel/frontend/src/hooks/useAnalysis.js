@@ -37,6 +37,7 @@ export function useAnalysis(apiBase) {
 
       const domain = data.domain
       const jobId = data.job_id
+      let historyFallbackCount = 0
 
       while (pollingRef.current) {
         await new Promise(r => setTimeout(r, 1500))
@@ -82,15 +83,31 @@ export function useAnalysis(apiBase) {
           } else if (job.status === 'not_found') {
             notFoundCount.current += 1
 
-            if (notFoundCount.current <= 10) {
+            if (notFoundCount.current <= 5) {
               setProgressMessage('Waiting for fresh re-crawl...')
               continue
             }
 
-            setAnalysing(false)
-            setError('Fresh re-crawl job was lost. Please try again.')
-            pollingRef.current = false
-            return null
+            historyFallbackCount += 1
+            setProgressMessage('Finishing fresh report...')
+            try {
+              const reportRes = await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`, { cache: 'no-store' })
+              if (reportRes.ok) {
+                const report = await reportRes.json()
+                setAnalysing(false)
+                setProgress(100)
+                setStage('complete')
+                pollingRef.current = false
+                return report
+              }
+            } catch {}
+
+            if (historyFallbackCount > 40) {
+              setAnalysing(false)
+              setError('Fresh re-crawl is still running or was interrupted. Please refresh and check history.')
+              pollingRef.current = false
+              return null
+            }
           }
         } catch (pollErr) {
           setProgressMessage('Reconnecting...')
