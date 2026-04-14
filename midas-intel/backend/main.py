@@ -1407,7 +1407,7 @@ def quick_extract_company_name(pages, domain):
 
 # ── FULL ANALYSIS PIPELINE ───────────────────────────────────────────────────
 
-def analyse_single_url(website_url, firecrawl_key, status_callback=None):
+def analyse_single_url(website_url, firecrawl_key, status_callback=None, should_save=None):
     """Run full analysis pipeline for one URL. Returns (entry_dict, error_str).
     
     Optimised pipeline (parallel where possible):
@@ -1617,7 +1617,8 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
             "company_data": _company_data,
             "sales_data":   _sales_data,
         }
-        save_history(_entry)
+        if should_save is None or should_save():
+            save_history(_entry)
 
         if status_callback:
             status_callback("complete", "Done!", 100)
@@ -2004,7 +2005,12 @@ def start_analysis(req: AnalyseRequest):
         def status_callback(stage, message, progress):
             _update_job(domain, job_id=job_id, stage=stage, message=message, progress=progress)
 
-        entry, err = analyse_single_url(url, FIRECRAWL_KEY, status_callback=status_callback)
+        def is_current_job():
+            return _get_job(domain).get("job_id") == job_id
+
+        entry, err = analyse_single_url(url, FIRECRAWL_KEY, status_callback=status_callback, should_save=is_current_job)
+        if not is_current_job():
+            return
         if entry:
             entry["job_id"] = job_id
             _update_job(domain, job_id=job_id, status="complete", progress=100, message="Done!", result=entry, error=None)
