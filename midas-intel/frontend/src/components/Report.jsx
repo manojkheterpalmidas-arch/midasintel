@@ -1,4 +1,33 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component } from 'react'
+
+// Error boundary to prevent tab crashes from blanking the whole page
+class TabErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', margin: '12px 0' }}>
+          <div style={{ fontWeight: 600, fontSize: '14px', color: '#dc2626', marginBottom: '6px' }}>
+            This tab encountered an error
+          </div>
+          <div style={{ fontSize: '13px', color: '#6b7280' }}>
+            The data for this company may have an unexpected format. Other tabs should still work.
+          </div>
+          <pre style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px', whiteSpace: 'pre-wrap' }}>
+            {this.state.error?.message || 'Unknown error'}
+          </pre>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -15,6 +44,20 @@ const SCORE_CONFIG = {
   Hot:  { emoji: '🔥', cls: 'score-hot' },
   Warm: { emoji: '⚡', cls: 'score-warm' },
   Cold: { emoji: '❄️', cls: 'score-cold' },
+}
+
+// Safe render — handles cases where DeepSeek returns objects instead of strings
+function safeStr(val) {
+  if (val === null || val === undefined) return ''
+  if (typeof val === 'string') return val
+  if (typeof val === 'object') return JSON.stringify(val)
+  return String(val)
+}
+
+// Safe array — ensures we always iterate over an array of strings
+function safeArr(val) {
+  if (!Array.isArray(val)) return []
+  return val.map(item => safeStr(item))
 }
 
 function ScoreBadge({ score }) {
@@ -40,20 +83,20 @@ function OverviewTab({ cd, sd }) {
     <div className="tab-grid">
       <div className="tab-col">
         <SectionLabel>Company overview</SectionLabel>
-        {(cd.overview || []).map((b, i) => (
+        {safeArr(cd.overview).map((b, i) => (
           <InsightCard key={i}>{b}</InsightCard>
         ))}
 
         <SectionLabel>Engineering capabilities</SectionLabel>
         <div className="pill-wrap">
-          {(cd.engineering_capabilities || []).map((c, i) => (
+          {safeArr(cd.engineering_capabilities).map((c, i) => (
             <PillTag key={i}>{c}</PillTag>
           ))}
         </div>
 
         <SectionLabel>Project types</SectionLabel>
         <div className="pill-wrap">
-          {(cd.project_types || []).map((p, i) => (
+          {safeArr(cd.project_types).map((p, i) => (
             <PillTag key={i}>{p}</PillTag>
           ))}
         </div>
@@ -61,9 +104,9 @@ function OverviewTab({ cd, sd }) {
 
       <div className="tab-col">
         <SectionLabel>Software detected</SectionLabel>
-        {(cd.software_mentioned || []).length > 0 ? (
+        {safeArr(cd.software_mentioned).length > 0 ? (
           <div className="pill-wrap">
-            {cd.software_mentioned.map((s, i) => (
+            {safeArr(cd.software_mentioned).map((s, i) => (
               <PillTag key={i} variant="red">{s}</PillTag>
             ))}
           </div>
@@ -72,7 +115,7 @@ function OverviewTab({ cd, sd }) {
         )}
 
         <SectionLabel>Pain points</SectionLabel>
-        {(sd.pain_points || []).map((p, i) => (
+        {safeArr(sd.pain_points).map((p, i) => (
           <InsightCard key={i} accent="#d97706">{p}</InsightCard>
         ))}
       </div>
@@ -161,7 +204,7 @@ function OpportunitiesTab({ sd }) {
     <div className="tab-grid">
       <div className="tab-col">
         <SectionLabel>FEM / FEA opportunities</SectionLabel>
-        {(sd.fem_opportunities || []).map((o, i) => (
+        {safeArr(sd.fem_opportunities).map((o, i) => (
           <InsightCard key={i}>
             <span className="opp-num">{String(i + 1).padStart(2, '0')}</span>
             {o}
@@ -170,11 +213,11 @@ function OpportunitiesTab({ sd }) {
       </div>
       <div className="tab-col">
         <SectionLabel>Hiring signals</SectionLabel>
-        {(sd.hiring_signals || []).map((s, i) => (
+        {safeArr(sd.hiring_signals).map((s, i) => (
           <div key={i} className="signal-card">▲ {s}</div>
         ))}
         <SectionLabel>Expansion signals</SectionLabel>
-        {(sd.expansion_signals || []).map((s, i) => (
+        {safeArr(sd.expansion_signals).map((s, i) => (
           <div key={i} className="signal-card">◆ {s}</div>
         ))}
       </div>
@@ -188,34 +231,34 @@ function StrategyTab({ sd }) {
     <div className="tab-grid">
       <div className="tab-col">
         <SectionLabel>Entry point</SectionLabel>
-        <div className="info-box blue">{sd.entry_point || 'Not determined'}</div>
+        <div className="info-box blue">{safeStr(sd.entry_point) || 'Not determined'}</div>
 
         <SectionLabel>Value positioning</SectionLabel>
-        <div className="info-box green">{sd.value_positioning || 'Not determined'}</div>
+        <div className="info-box green">{safeStr(sd.value_positioning) || 'Not determined'}</div>
 
         <SectionLabel>Likely objections</SectionLabel>
-        {(sd.likely_objections || []).map((o, i) => (
+        {safeArr(sd.likely_objections).map((o, i) => (
           <InsightCard key={i} accent="#d97706">⚠ {o}</InsightCard>
         ))}
 
         <SectionLabel>Recommended MIDAS products</SectionLabel>
         <div className="pill-wrap">
-          {(sd.recommended_products || []).map((p, i) => (
+          {safeArr(sd.recommended_products).map((p, i) => (
             <PillTag key={i} variant="red">{p}</PillTag>
           ))}
         </div>
-        {sd.product_reason && <p className="text-muted mt-sm">{sd.product_reason}</p>}
+        {sd.product_reason && <p className="text-muted mt-sm">{safeStr(sd.product_reason)}</p>}
       </div>
 
       <div className="tab-col">
         <SectionLabel>Pre-meeting cheat sheet</SectionLabel>
         <div className="cheat-label">3 THINGS TO MENTION</div>
-        {(sd.pre_meeting_mention || []).map((m, i) => (
+        {safeArr(sd.pre_meeting_mention).map((m, i) => (
           <div key={i} className="cheat-item">✓ {m}</div>
         ))}
 
         <div className="cheat-label mt-md">3 SMART QUESTIONS</div>
-        {(sd.smart_questions || []).map((q, i) => (
+        {safeArr(sd.smart_questions).map((q, i) => (
           <div key={i} className="cheat-item">? {q}</div>
         ))}
 
@@ -223,7 +266,7 @@ function StrategyTab({ sd }) {
         {sd.opening_line && (
           <blockquote className="opening-line">
             <span className="quote-mark">"</span>
-            {sd.opening_line}
+            {safeStr(sd.opening_line)}
           </blockquote>
         )}
       </div>
@@ -483,7 +526,9 @@ export function Report({ report, apiBase, firecrawlKey, onRefresh }) {
 
       {/* Tab content */}
       <div className="tab-content">
-        {renderTab()}
+        <TabErrorBoundary key={activeTab}>
+          {renderTab()}
+        </TabErrorBoundary>
       </div>
     </div>
   )
