@@ -245,6 +245,25 @@ def extract_locations_from_text(text):
 
     return locations[:5]
 
+def clean_locations(locations):
+    cleaned = []
+    seen = set()
+    for loc in locations or []:
+        value = re.sub(r"\s+", " ", str(loc or "")).strip(" ,.-")
+        if not value:
+            continue
+        if re.search(r"\b(set to|companies house|include|company|officer|appointed|registered)\b", value, re.IGNORECASE):
+            continue
+        if value.lower().startswith(("the ", "to ", "and ", "or ")):
+            continue
+        if len(value) > 80:
+            continue
+        key = value.lower()
+        if key not in seen:
+            seen.add(key)
+            cleaned.append(value)
+    return cleaned[:5]
+
 
 # ── CRAWLING ─────────────────────────────────────────────────────────────────
 
@@ -1658,8 +1677,9 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None, should_
             if fb_emp and fb_emp != rejected_employee_count:
                 _company_data["employee_count"] = fb_emp
 
+        _company_data["locations"] = clean_locations(_company_data.get("locations", []))
         if not _company_data.get("locations"):
-            fallback_locations = extract_locations_from_text(corpus + "\n" + _extra_corpus)
+            fallback_locations = clean_locations(extract_locations_from_text(corpus + "\n" + _extra_corpus))
             if fallback_locations:
                 _company_data["locations"] = fallback_locations
 
@@ -2115,6 +2135,9 @@ async def ws_analyse(websocket: WebSocket):
             await websocket.send_json({"type": "error", "message": "Missing url"})
             await websocket.close()
             return
+        if not url.startswith("http"):
+            url = "https://" + url
+        delete_from_history(extract_domain(url))
 
         def status_callback(stage, message, progress):
             status_queue.append({"type": "progress", "stage": stage, "message": message, "progress": progress})
