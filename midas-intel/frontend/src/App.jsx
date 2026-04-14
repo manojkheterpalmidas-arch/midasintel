@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { SearchBar } from './components/SearchBar'
 import { Report } from './components/Report'
@@ -13,6 +13,7 @@ export default function App() {
   const [activeReport, setActiveReport] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [credits, setCredits] = useState(null)
+  const analysisSeq = useRef(0)
 
   const { history, refreshHistory, searchHistory, deleteFromHistory } = useHistory(API_BASE)
   const { analysing, progress, progressMessage, stage, startAnalysis, error: analysisError } = useAnalysis(API_BASE)
@@ -34,9 +35,10 @@ export default function App() {
   }, [])
 
   const handleAnalyse = async (url) => {
+    const seq = ++analysisSeq.current
     setActiveReport(null)
     const result = await startAnalysis(url)
-    if (result) {
+    if (result && seq === analysisSeq.current) {
       setActiveReport(result)
       refreshHistory()
       // Refresh credits after analysis
