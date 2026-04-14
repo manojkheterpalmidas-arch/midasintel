@@ -577,7 +577,7 @@ def analyze_company(corpus):
   "software_mentioned": ["any FEA/CAD/BIM tools"],
   "people": [{{"name": "Full Name", "role": "Job Title", "tier": "Owner|Founder|Director|Principal|Senior|Engineer|Graduate|Technician|Other"}}],
   "open_roles": [{{"title": "Job title", "skills": ["skill1"], "fem_mentioned": true}}],
-  "projects": [{{"name": "Project name", "type": "Bridge|Building|Metro|Infrastructure|Residential|Industrial|Other", "location": "City or null", "client": "Client name or null", "description": "One sentence summary", "fem_relevant": true}}],
+  "projects": [{{"name": "Project name", "type": "Bridge|Building|Metro|Infrastructure|Residential|Industrial|Geotechnical|Tunnel|Foundation|Slope|Dam|Retaining Wall|Other", "location": "City or null", "client": "Client name or null", "description": "One sentence summary", "fem_relevant": true}}],
   "confidence": "High|Medium|Low",
   "confidence_reason": "One sentence explaining why"
 }}
@@ -585,6 +585,7 @@ Extract ALL people — engineering and technical staff only.
 For locations: include any city mentioned as company headquarters, office, or base location — check footer addresses, contact pages, and about sections.
 For employee_count: check ALL sources including Glassdoor, LinkedIn, Companies House.
 For projects: extract ALL completed or ongoing projects mentioned anywhere.
+For fem_relevant: set to true if the project involves structural analysis, FEA, FEM, geotechnical modelling, soil analysis, slope stability, foundation design, tunnelling, or any work where engineering analysis software would be used.
 Website content:
 {corpus}""",
         max_tokens=8000
@@ -660,7 +661,7 @@ POSITIONING: Best global design tool for building and general structure firms.
 ════════════════════════════════════════════════
 3. MIDAS FEA NX — Detailed Local & Nonlinear Analysis
 ════════════════════════════════════════════════
-WHAT IT IS: High-end finite element analysis software designed for detailed, local, and nonlinear analysis of civil and structural systems. Used when global tools are not sufficient.
+WHAT IT IS: High-end finite element analysis software designed for detailed, local, and nonlinear analysis of civil and structural systems. Used when global tools are not sufficient. Also used as a research and academic FEM platform.
 
 WHAT IT DOES:
 - 2D and 3D element modelling (plates, solids) for complex geometry
@@ -678,7 +679,7 @@ KEY CAPABILITIES:
 - Parallel computing for large models
 - Modern UI for faster preprocessing and postprocessing
 
-TYPICAL USE CASES:
+TYPICAL USE CASES — COMMERCIAL:
 - Steel connections, anchor zones, bridge joints
 - Deep beams, shear walls, slabs
 - Bridge local analysis — anchorage zones, bearings
@@ -686,8 +687,34 @@ TYPICAL USE CASES:
 - Failure analysis — concrete cracking, fatigue
 - Nonlinear problems — large deformation, contact problems
 
-VALUE PROPOSITION: High accuracy for complex local analysis that global tools cannot handle. Seamless integration with CIVIL NX and GEN NX.
-POSITIONING: Detailed local analysis tool — always pairs with CIVIL NX or GEN NX.
+TYPICAL USE CASES — RESEARCH & ACADEMIC:
+- University structural engineering research (PhD, Masters thesis work)
+- Parametric FEM studies — material model validation, mesh sensitivity analysis
+- Novel structural system investigation — new connection types, innovative materials
+- Concrete cracking and fracture mechanics research
+- Composite material behaviour modelling
+- Progressive collapse and failure mechanism studies
+- Benchmark studies comparing FEA results with experimental data
+- Seismic performance research on new structural systems
+- FRP strengthening analysis and bond-slip modelling
+
+CRITICAL — FEA NX TARGET COMPANIES (often missed):
+- University civil/structural engineering departments (research licences)
+- R&D departments within large engineering firms
+- Structural forensic investigation firms (failure analysis, accident reconstruction)
+- Testing laboratories that need FEM to correlate with physical test results
+- Specialist consultancies doing unusual/non-standard structural analysis
+- Firms doing structural health monitoring that need FEM baseline models
+- Companies developing new construction products (need FEA validation)
+
+FEA NX COMPETITIVE POSITIONING:
+- vs ANSYS/ABAQUS → More accessible for civil engineers, civil-specific material models and workflows, lower cost for civil applications
+- vs DIANA → Comparable nonlinear capabilities, better integration with MIDAS ecosystem
+- vs ATENA → Competitive for concrete analysis, broader capability range
+- vs LS-DYNA → More suitable for quasi-static civil problems vs crash/impact dynamics
+
+VALUE PROPOSITION: High accuracy for complex local analysis that global tools cannot handle. Seamless integration with CIVIL NX and GEN NX. Also a standalone research-grade FEM platform for universities and R&D.
+POSITIONING: Detailed local analysis tool — pairs with CIVIL NX or GEN NX for commercial work. Standalone research FEM platform for academic and R&D users.
 
 ════════════════════════════════════════════════
 4. MIDAS GTS NX — Geotechnical Analysis
@@ -717,6 +744,27 @@ TYPICAL USE CASES:
 - Slope stability — landslides and open pit mining
 - Dam engineering and seepage analysis
 - Soil-structure interaction for buildings and bridges
+- Embankment design and ground improvement modelling
+- Landfill engineering and environmental geotechnics
+- Consolidation and settlement analysis
+
+CRITICAL — GTS NX TARGET COMPANIES (often missed):
+- Geotechnical investigation/research firms (soil testing, borehole analysis, geomechanics labs)
+- Ground engineering consultancies
+- Geotechnical design firms (foundations, retaining walls, piling)
+- Tunnelling and underground construction firms
+- Mining and quarry engineering
+- Dam and reservoir engineers
+- Slope stability and landslide assessment firms
+- Environmental geotechnics (landfill, contamination modelling)
+- Firms doing CPT, SPT, triaxial testing, plate load tests — they need GTS NX to model results
+- Any firm producing geotechnical elaborates, soil investigation reports, or foundation recommendations
+
+GTS NX COMPETITIVE POSITIONING:
+- vs PLAXIS → Better BIM integration, better mesh generation, more intuitive UI, better value
+- vs GeoStudio/SLOPE/W → Full 3D FEA vs simplified 2D limit equilibrium
+- vs FLAC/UDEC → More accessible for consulting engineers, faster model setup
+- vs manual/spreadsheet calculations → Automated FEA replaces conservative hand calculations
 
 VALUE PROPOSITION: Accurate soil and rock modelling + advanced geotechnical capabilities + full ground engineering coverage.
 POSITIONING: Essential for any firm doing geotechnical, tunnelling, underground, or foundation work.
@@ -726,11 +774,17 @@ CROSS-SELL LOGIC — MATCH TO COMPANY TYPE
 ════════════════════════════════════════════════
 - Bridge/infrastructure firm → CIVIL NX (primary) + FEA NX (local detailing)
 - Building/structural firm → GEN NX (primary) + FEA NX (connection design)
-- Geotechnical/ground firm → GTS NX (primary) + CIVIL NX (structure interaction)
+- Geotechnical/ground engineering firm → GTS NX (primary) + CIVIL NX (structure interaction)
+- Geotech investigation/research firm → GTS NX (they model soil behaviour from their test data)
+- Piling/foundation specialist → GTS NX + CIVIL NX (soil-structure interaction)
 - Mixed civil firm (bridges + buildings) → CIVIL NX + GEN NX + FEA NX
 - Full service firm (all disciplines) → Full suite: CIVIL NX + GEN NX + FEA NX + GTS NX
 - Metro/tunnelling firm → GTS NX + CIVIL NX
+- Dam/embankment firm → GTS NX + CIVIL NX
 - Consulting/advisory firm → Start with CIVIL NX or GEN NX depending on focus
+- University/research institution → FEA NX (research licence) + relevant NX product for teaching
+- Structural forensic/testing lab → FEA NX (failure analysis, test correlation)
+- R&D department → FEA NX (validation, parametric studies)
 
 ════════════════════════════════════════════════
 COMPETITIVE POSITIONING
@@ -738,13 +792,15 @@ COMPETITIVE POSITIONING
 - vs LUSAS/STAAD/SAP2000 → MIDAS offers better automation, modern UI, and construction stage analysis
 - vs PLAXIS → GTS NX is directly competitive, with better BIM integration and CAD workflow
 - vs ETABS → GEN NX offers more automation and parametric design capabilities
-- vs ANSYS/ABAQUS → FEA NX is more accessible for civil engineers with civil-specific workflows
+- vs ANSYS/ABAQUS → FEA NX is more accessible for civil engineers with civil-specific workflows and lower cost
+- vs DIANA/ATENA → FEA NX is competitive for nonlinear concrete analysis with better ecosystem integration
+- vs GeoStudio → GTS NX offers full 3D FEA vs simplified 2D methods
 - No existing FEA software detected → Clean opportunity, position as first professional FEA platform
 
 ════════════════════════════════════════════════
 ONE-LINE MASTER PITCH
 ════════════════════════════════════════════════
-MIDAS NX Suite provides a complete structural and geotechnical engineering ecosystem — from global bridge and building design to detailed local analysis and ground engineering — all within one integrated, automated workflow.
+MIDAS NX Suite provides a complete structural and geotechnical engineering ecosystem — from global bridge and building design to detailed local analysis, ground engineering, and research-grade FEM — all within one integrated, automated workflow.
 """
 
 
@@ -774,28 +830,28 @@ def analyze_sales(corpus, company_json):
   "overall_score": "Hot|Warm|Cold",
   "score_reason": "2-3 sentence reason for the score",
   "recommended_products": ["CIVIL NX", "GEN NX", "FEA NX", "GTS NX"],
-  "product_reason": "1-2 sentences for each product with explanation of why this product fits"
+  "product_reason": "3-4 sentence explanation of why these products fit"
 }}
 
 LEAD SCORING SYSTEM (0-100) — score each category independently then sum:
 
-1. STRUCTURAL RELEVANCE (0-30 points)
-   How central is structural/geotechnical engineering to their business?
-   - 25-30: Structural/geotech is their PRIMARY service (e.g. structural consultancy, bridge design firm)
-   - 15-24: Structural is ONE of several services (e.g. multi-discipline firm with structural dept)
-   - 5-14: They do related civil work but no direct structural analysis (e.g. contractor, infrastructure)
-   - 0-4: No structural engineering at all (e.g. surveying, traffic, environmental, planning, MEP)
+1. STRUCTURAL / GEOTECHNICAL RELEVANCE (0-30 points)
+   How central is structural OR geotechnical engineering to their business?
+   - 25-30: Structural/geotech is their PRIMARY service (e.g. structural consultancy, bridge design firm, geotechnical investigation firm, ground engineering consultancy, foundation design specialist, tunnelling engineer)
+   - 15-24: Structural/geotech is ONE of several services (e.g. multi-discipline firm with structural or geotech dept)
+   - 5-14: They do related civil work but no direct structural/geotech analysis (e.g. contractor, infrastructure manager)
+   - 0-4: No structural or geotechnical engineering at all (e.g. surveying, traffic, environmental, planning, MEP)
 
-2. FEM/FEA NEED (0-25 points)
-   Evidence they need or use structural analysis software?
-   - 20-25: Clear FEM/FEA work — complex structures, bridges, nonlinear analysis, detailed design
-   - 12-19: Likely FEM need — they do structural design but no explicit FEA evidence
-   - 5-11: Possible FEM need — some structural projects but mainly simple/standard work
-   - 0-4: No FEM need — no structural analysis involved in their work
+2. FEM/FEA/GEOTECH MODELLING NEED (0-25 points)
+   Evidence they need structural analysis or geotechnical modelling software?
+   - 20-25: Clear FEM/FEA/geotech modelling work — complex structures, bridges, nonlinear analysis, soil modelling, slope stability, foundation analysis, tunnel design, deep excavation analysis
+   - 12-19: Likely need — they do structural/geotech design but no explicit FEA evidence. Includes firms that produce geotechnical elaborates, soil investigation reports, or foundation recommendations (they currently use hand calculations or basic tools — GTS NX is an upgrade)
+   - 5-11: Possible need — some relevant projects but mainly simple/standard work
+   - 0-4: No FEM/geotech modelling need — no analysis involved in their work
 
 3. BUYING SIGNALS (0-20 points)
    Evidence of active need or growth?
-   - 16-20: Hiring structural engineers, expanding, new office, large project wins
+   - 16-20: Hiring structural/geotech engineers, expanding, new office, large project wins
    - 10-15: Some growth signals, active project pipeline, team building
    - 5-9: Stable company, no strong growth signals
    - 0-4: Shrinking, no hiring, no visible activity
@@ -823,7 +879,7 @@ If lead_score is below 30, set recommended_products to [] and fem_opportunities 
 
 Company data: {company_json}
 Website excerpt: {corpus[:4000]}""",
-        max_tokens=8000
+        max_tokens=4000
     )
 
 
@@ -1066,7 +1122,7 @@ Extract ONLY additional people and projects NOT already covered.
 Return ONLY valid JSON:
 {{
   "people": [{{"name": "Full Name", "role": "Job Title", "tier": "Owner|Founder|Director|Principal|Senior|Engineer|Graduate|Technician|Other"}}],
-  "projects": [{{"name": "Project name", "type": "Bridge|Building|Metro|Infrastructure|Residential|Industrial|Other", "location": "City or null", "client": "Client name or null", "description": "One sentence summary", "fem_relevant": true}}],
+  "projects": [{{"name": "Project name", "type": "Bridge|Building|Metro|Infrastructure|Residential|Industrial|Geotechnical|Tunnel|Foundation|Slope|Dam|Retaining Wall|Other", "location": "City or null", "client": "Client name or null", "description": "One sentence summary", "fem_relevant": true}}],
   "locations": ["additional office cities found"],
   "founded": "year if found, else null",
   "employee_count": "string if found, else null"
