@@ -45,7 +45,7 @@ export function useAnalysis(apiBase) {
           const pollRes = await fetch(`${apiBase}/api/jobs/${encodeURIComponent(domain)}`)
           const job = await pollRes.json()
 
-          if (jobId && job.job_id && job.job_id !== jobId) {
+          if (jobId && job.status !== 'not_found' && job.job_id !== jobId) {
             setProgressMessage('Waiting for fresh re-crawl...')
             continue
           }
@@ -62,7 +62,7 @@ export function useAnalysis(apiBase) {
             setStage('complete')
             pollingRef.current = false
 
-            if (job.result) {
+            if (job.result && (!jobId || job.result.job_id === jobId)) {
               setAnalysing(false)
               return job.result
             }
