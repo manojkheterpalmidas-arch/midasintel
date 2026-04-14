@@ -1809,14 +1809,11 @@ def start_analysis(req: AnalyseRequest):
 
 @app.get("/api/jobs/{domain}")
 def get_job_status(domain: str):
-    """Poll this endpoint for analysis progress."""
+    """Poll this endpoint for analysis progress. Returns the job result directly when complete."""
     job = _get_job(domain)
     if not job:
-        # No active job — check if result already exists in history
-        existing = find_in_history(domain)
-        if existing:
-            return {"status": "complete", "domain": domain, "progress": 100}
         return {"status": "not_found", "domain": domain}
+    # When complete, include the full result so frontend doesn't need to fetch from history
     return {"domain": domain, **job}
 
 
