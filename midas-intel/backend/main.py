@@ -637,20 +637,63 @@ def analyze_sales(corpus, company_json):
   "pre_meeting_mention": ["specific thing about their projects", "thing 2", "thing 3"],
   "smart_questions": ["specific question about their workflow", "question 2", "question 3"],
   "opening_line": "One strong personalised opening line",
+  "lead_score": 0-100,
+  "score_breakdown": {{
+    "structural_relevance": 0-30,
+    "fem_need": 0-25,
+    "buying_signals": 0-20,
+    "accessibility": 0-15,
+    "competitive_landscape": 0-10
+  }},
   "overall_score": "Hot|Warm|Cold",
   "score_reason": "2-3 sentence reason for the score",
   "recommended_products": ["CIVIL NX", "GEN NX", "FEA NX", "GTS NX"],
   "product_reason": "3-4 sentence explanation of why these products fit"
 }}
 
-CRITICAL SCORING RULES — follow these strictly:
-- HOT: Company does structural analysis, bridge design, building design, geotechnical analysis, or FEM/FEA work as a CORE service. They have engineers who would directly use MIDAS software daily. Evidence: structural projects, FEA mentions, structural job postings.
-- WARM: Company does civil engineering or construction that INVOLVES structural elements (e.g. infrastructure contractor that subcontracts structural design, or a multi-discipline firm with a structural department). They might buy MIDAS but it's not their core need.
-- COLD: Company does NOT do structural analysis or FEM/FEA work. This includes: surveying/geodetic companies, land surveyors, GIS/mapping firms, traffic/transport planners, environmental consultants, quantity surveyors, project managers, architects (unless structural), MEP engineers, pure software companies, government bodies, and any firm where no one would actually use structural analysis software. If there is no clear evidence of structural engineering or FEM work, score as COLD.
+LEAD SCORING SYSTEM (0-100) — score each category independently then sum:
 
-Do NOT inflate scores. A company being in the "civil engineering" or "construction" sector does NOT automatically make them Warm — they must have structural analysis needs. Survey companies, highways maintenance firms, and planning consultancies are COLD even if they work alongside structural engineers.
+1. STRUCTURAL RELEVANCE (0-30 points)
+   How central is structural/geotechnical engineering to their business?
+   - 25-30: Structural/geotech is their PRIMARY service (e.g. structural consultancy, bridge design firm)
+   - 15-24: Structural is ONE of several services (e.g. multi-discipline firm with structural dept)
+   - 5-14: They do related civil work but no direct structural analysis (e.g. contractor, infrastructure)
+   - 0-4: No structural engineering at all (e.g. surveying, traffic, environmental, planning, MEP)
 
-If the score is COLD, set recommended_products to an empty array [] and set fem_opportunities to ["No direct FEM/FEA opportunities identified — company does not perform structural analysis"].
+2. FEM/FEA NEED (0-25 points)
+   Evidence they need or use structural analysis software?
+   - 20-25: Clear FEM/FEA work — complex structures, bridges, nonlinear analysis, detailed design
+   - 12-19: Likely FEM need — they do structural design but no explicit FEA evidence
+   - 5-11: Possible FEM need — some structural projects but mainly simple/standard work
+   - 0-4: No FEM need — no structural analysis involved in their work
+
+3. BUYING SIGNALS (0-20 points)
+   Evidence of active need or growth?
+   - 16-20: Hiring structural engineers, expanding, new office, large project wins
+   - 10-15: Some growth signals, active project pipeline, team building
+   - 5-9: Stable company, no strong growth signals
+   - 0-4: Shrinking, no hiring, no visible activity
+
+4. ACCESSIBILITY (0-15 points)
+   Can we reach decision-makers? Is the company approachable?
+   - 12-15: Key people identified with names and roles, small/medium firm, direct access likely
+   - 7-11: Some people found, medium firm, may need multiple touchpoints
+   - 3-6: Large corporation, hard to reach decision-makers, long sales cycle
+   - 0-2: No people found, government body, or unapproachable organisation
+
+5. COMPETITIVE LANDSCAPE (0-10 points)
+   What's their current software situation?
+   - 8-10: No competing FEA software detected — clean opportunity
+   - 4-7: Uses older/basic tools (Excel, simple frame analysis) — upgrade opportunity
+   - 1-3: Uses competing FEA software (LUSAS, STAAD, SAP2000, ETABS) — displacement sale needed
+   - 0: Locked into competitor ecosystem with long-term contracts
+
+OVERALL LABEL derived from lead_score:
+- Hot: 70-100 (strong structural firm with clear FEM needs)
+- Warm: 40-69 (some potential but gaps in relevance or accessibility)
+- Cold: 0-39 (no real FEM opportunity)
+
+If lead_score is below 30, set recommended_products to [] and fem_opportunities to ["No direct FEM/FEA opportunities identified"].
 
 Company data: {company_json}
 Website excerpt: {corpus[:4000]}""",
@@ -1132,6 +1175,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
             "domain":       _domain,
             "company":      _company_data.get("company_name", website_url),
             "score":        _sales_data.get("overall_score", "Cold"),
+            "lead_score":   _sales_data.get("lead_score", 0),
             "date":         now_gmt2().strftime("%d %b %Y %H:%M"),
             "pages_count":  len(pages),
             "company_data": _company_data,
