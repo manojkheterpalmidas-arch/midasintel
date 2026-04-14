@@ -821,11 +821,11 @@ def analyze_sales(corpus, company_json):
   "opening_line": "One strong personalised opening line",
   "lead_score": 0-100,
   "score_breakdown": {{
-    "structural_relevance": 0-30,
-    "fem_need": 0-25,
-    "buying_signals": 0-20,
-    "accessibility": 0-15,
-    "competitive_landscape": 0-10
+    "structural_relevance": {{"score": 0-30, "reason": "one sentence why"}},
+    "fem_need": {{"score": 0-25, "reason": "one sentence why"}},
+    "buying_signals": {{"score": 0-20, "reason": "one sentence why"}},
+    "accessibility": {{"score": 0-15, "reason": "one sentence why"}},
+    "competitive_landscape": {{"score": 0-10, "reason": "one sentence why"}}
   }},
   "overall_score": "Hot|Warm|Cold",
   "score_reason": "2-3 sentence reason for the score",
@@ -874,6 +874,12 @@ OVERALL LABEL derived from lead_score:
 - Hot: 70-100 (strong structural firm with clear FEM needs)
 - Warm: 40-69 (some potential but gaps in relevance or accessibility)
 - Cold: 0-39 (no real FEM opportunity)
+
+CRITICAL SCORING INSTRUCTIONS:
+- Score EACH category independently based ONLY on the evidence for that category. Do NOT decide the overall score first and work backwards.
+- lead_score MUST equal the exact sum of all 5 category scores. Calculate it: structural_relevance + fem_need + buying_signals + accessibility + competitive_landscape = lead_score.
+- Two bridge design firms should NOT get the same score unless they have identical evidence. Differentiate based on specifics: one may have 12 people and complex projects (higher), another may have 3 people and simple projects (lower).
+- Use the FULL range of each scale. Not every good company is 25-28 in a category — some are 18, some are 22. Be precise.
 
 If lead_score is below 30, set recommended_products to [] and fem_opportunities to ["No direct FEM/FEA opportunities identified"].
 
@@ -1646,6 +1652,7 @@ def export_csv_route():
     writer.writerow([
         "Company","Domain","Lead Score","Score Label","Score Reason",
         "Structural Relevance (/30)","FEM Need (/25)","Buying Signals (/20)","Accessibility (/15)","Competitive Landscape (/10)",
+        "Relevance Reason","FEM Need Reason","Buying Signals Reason","Accessibility Reason","Competitive Reason",
         "Date Analysed","Pages Crawled",
         "Locations","Employee Count","Founded","Confidence","Confidence Reason",
         "Engineering Capabilities","Project Types","Software Mentioned",
@@ -1658,12 +1665,24 @@ def export_csv_route():
         cd = h.get("company_data", {}) or {}
         sd = h.get("sales_data", {}) or {}
         sb = sd.get("score_breakdown", {}) or {}
+        # Handle both old format (number) and new format ({score, reason})
+        def sb_score(key):
+            val = sb.get(key, "")
+            if isinstance(val, dict):
+                return val.get("score", "")
+            return val
+        def sb_reason(key):
+            val = sb.get(key, "")
+            if isinstance(val, dict):
+                return val.get("reason", "")
+            return ""
         writer.writerow([
             h.get("company",""), h.get("domain",""),
             sd.get("lead_score", h.get("lead_score", "")),
             h.get("score",""),
             sd.get("score_reason",""),
-            sb.get("structural_relevance",""), sb.get("fem_need",""), sb.get("buying_signals",""), sb.get("accessibility",""), sb.get("competitive_landscape",""),
+            sb_score("structural_relevance"), sb_score("fem_need"), sb_score("buying_signals"), sb_score("accessibility"), sb_score("competitive_landscape"),
+            sb_reason("structural_relevance"), sb_reason("fem_need"), sb_reason("buying_signals"), sb_reason("accessibility"), sb_reason("competitive_landscape"),
             h.get("date",""), h.get("pages_count",""),
             " | ".join(cd.get("locations",[])), cd.get("employee_count",""),
             cd.get("founded",""), cd.get("confidence",""), cd.get("confidence_reason",""),
