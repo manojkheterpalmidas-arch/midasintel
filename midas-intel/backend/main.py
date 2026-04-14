@@ -859,6 +859,197 @@ Website excerpt: {corpus[:4000]}""",
 
     sales_data = safe_json(raw)
     sig = sales_data.get("signals", {})
+    original_sig = dict(sig)
+
+    # Repair conservative/incorrect LLM scoring signals with facts already extracted
+    # from the company profile. The LLM is useful for strategy text, but it can miss
+    # obvious FEM relevance in projects and then mark strong engineering firms cold.
+    company_data = safe_json(company_json) if isinstance(company_json, str) else (company_json or {})
+    if not isinstance(company_data, dict):
+        company_data = {}
+
+    def as_list(value):
+        if isinstance(value, list):
+            return value
+        if value in (None, ""):
+            return []
+        return [value]
+
+    def text_join(*values):
+        parts = []
+        for value in values:
+            if isinstance(value, dict):
+                parts.extend(str(v) for v in value.values() if v)
+            elif isinstance(value, list):
+                parts.extend(text_join(v) for v in value)
+            elif value:
+                parts.append(str(value))
+        return " ".join(parts).lower()
+
+    projects = [p for p in as_list(company_data.get("projects")) if isinstance(p, dict)]
+    project_types = [str(t).lower() for t in as_list(company_data.get("project_types"))]
+    software = [str(s).strip() for s in as_list(company_data.get("software_mentioned")) if str(s).strip()]
+    company_blob = text_join(
+        company_data.get("tagline"),
+        company_data.get("overview"),
+        company_data.get("engineering_capabilities"),
+        company_data.get("project_types"),
+        projects,
+        company_data.get("open_roles"),
+        corpus[:8000],
+    )
+
+    def has_any(terms, blob=company_blob):
+        return any(term in blob for term in terms)
+
+    bridge_terms = ("bridge", "viaduct", "flyover", "highway", "railway", "rail", "transport infrastructure")
+    building_terms = ("building", "residential", "commercial", "mixed-use", "mixed use", "high-rise", "housing")
+    geotech_terms = ("geotechnical", "ground engineering", "soil", "slope", "retaining", "basement", "excavation", "earthworks")
+    tunnel_terms = ("tunnel", "tunnelling", "underground", "metro")
+    foundation_terms = ("foundation", "piling", "pile", "underpinning")
+    dam_terms = ("dam", "reservoir", "embankment")
+    marine_terms = ("marine", "coastal", "harbour", "port", "quay")
+    structural_terms = (
+        "structural engineer", "structural engineering", "structural design",
+        "civil engineer", "civil engineering", "temporary works", "steelwork",
+        "reinforced concrete", "rc frame", "frame design", "facade engineering",
+    )
+    non_engineering_terms = ("marketing agency", "law firm", "accountancy", "restaurant", "retail shop")
+
+    type_blob = " ".join(project_types)
+    has_bridges = has_any(bridge_terms) or "bridge" in type_blob
+    has_buildings = has_any(building_terms) or any(t in type_blob for t in ("building", "residential", "industrial"))
+    has_geotech = has_any(geotech_terms) or "geotechnical" in type_blob
+    has_tunnels = has_any(tunnel_terms) or "tunnel" in type_blob
+    has_foundations = has_any(foundation_terms) or "foundation" in type_blob
+    has_dams = has_any(dam_terms) or "dam" in type_blob
+    has_marine = has_any(marine_terms)
+
+    detected_flags = {
+        "has_bridges": has_bridges,
+        "has_buildings": has_buildings,
+        "has_geotech": has_geotech,
+        "has_tunnels": has_tunnels,
+        "has_foundations": has_foundations,
+        "has_dams": has_dams,
+        "has_marine": has_marine,
+    }
+    for key, detected in detected_flags.items():
+        if detected:
+            sig[key] = True
+    detected_labels = [
+        label for key, label in (
+            ("has_bridges", "bridge/infrastructure work"),
+            ("has_buildings", "building/general structural work"),
+            ("has_geotech", "geotechnical or retaining works"),
+            ("has_tunnels", "tunnel/underground work"),
+            ("has_foundations", "foundation or piling work"),
+            ("has_dams", "dam/reservoir/embankment work"),
+            ("has_marine", "marine/coastal work"),
+        )
+        if sig.get(key)
+    ]
+
+    fem_project_count = sum(1 for p in projects if p.get("fem_relevant"))
+    engineering_project_count = sum(1 for detected in detected_flags.values() if detected)
+    if projects and not sig.get("project_count_on_site"):
+        sig["project_count_on_site"] = len(projects)
+
+    explicit_fem_terms = (
+        "fea", "fem", "finite element", "finite-element", "analysis model",
+        "nonlinear", "non-linear", "seismic", "dynamic analysis", "structural analysis",
+        "soil analysis", "slope stability", "construction stage", "load analysis",
+    )
+    fem_from_text = has_any(explicit_fem_terms)
+    fem_evidence_items = []
+    if fem_project_count:
+        fem_evidence_items.append(f"{fem_project_count} FEM-relevant project(s)")
+    if detected_labels:
+        fem_evidence_items.extend(detected_labels[:3])
+    if fem_from_text:
+        fem_evidence_items.insert(0, "analysis/FEM language found")
+    complex_terms = (
+        "bridge", "tunnel", "geotechnical", "foundation", "retaining", "dam",
+        "seismic", "nonlinear", "non-linear", "temporary works", "rail",
+        "metro", "underground", "high-rise", "deep excavation",
+    )
+
+    if fem_from_text:
+        sig["fem_evidence"] = "explicit_fem_mentioned"
+    elif fem_project_count or has_bridges or has_geotech or has_tunnels or has_foundations or has_dams:
+        if sig.get("fem_evidence") in (None, "", "no_fem", "possible_fem"):
+            sig["fem_evidence"] = "likely_fem_from_projects"
+    elif engineering_project_count or has_any(structural_terms):
+        if sig.get("fem_evidence") in (None, "", "no_fem"):
+            sig["fem_evidence"] = "possible_fem"
+
+    if has_any(complex_terms) or fem_project_count:
+        if sig.get("project_complexity") in (None, "", "none", "simple"):
+            sig["project_complexity"] = "complex"
+    elif engineering_project_count and sig.get("project_complexity") in (None, "", "none"):
+        sig["project_complexity"] = "moderate"
+
+    if (has_geotech or has_tunnels or has_foundations or has_dams) and (has_bridges or has_buildings or has_any(structural_terms)):
+        sig["core_service"] = "structural_and_geotech"
+    elif has_geotech or has_tunnels or has_foundations or has_dams:
+        if sig.get("core_service") in (None, "", "not_engineering", "civil_no_structural"):
+            sig["core_service"] = "geotech_only"
+    elif has_bridges or has_buildings or has_any(structural_terms):
+        if sig.get("core_service") in (None, "", "not_engineering", "civil_no_structural"):
+            sig["core_service"] = "structural_only"
+    elif has_any(("civil engineering", "infrastructure", "engineering consultancy")) and not has_any(non_engineering_terms):
+        if sig.get("core_service") in (None, "", "not_engineering"):
+            sig["core_service"] = "multi_discipline_with_structural"
+
+    if software:
+        lower_sw = " ".join(software).lower()
+        competitor_terms = ("etabs", "sap2000", "staad", "tekla", "robot", "plaxis", "lusas", "ansys", "abaqus", "diana", "atena", "sofistik")
+        basic_terms = ("autocad", "revit", "civil 3d", "civils 3d", "navisworks", "bim")
+        if any(term in lower_sw for term in competitor_terms):
+            sig["competitor_software"] = "competitor_detected"
+        elif any(term in lower_sw for term in basic_terms) and sig.get("competitor_software") in (None, "", "none_detected"):
+            sig["competitor_software"] = "basic_tools_only"
+
+    people = as_list(company_data.get("people"))
+    if people and not sig.get("people_found_count"):
+        sig["people_found_count"] = len(people)
+    if people and not sig.get("decision_makers_found"):
+        decision_terms = ("owner", "founder", "director", "principal", "partner", "associate")
+        sig["decision_makers_found"] = any(
+            any(term in str(p.get("tier", "") + " " + p.get("role", "")).lower() for term in decision_terms)
+            for p in people if isinstance(p, dict)
+        )
+
+    if sig.get("company_size") in (None, "", "unknown"):
+        emp_text = str(company_data.get("employee_count") or "").lower()
+        nums = [int(n.replace(",", "")) for n in re.findall(r"\d[\d,]*", emp_text)]
+        emp_n = nums[0] if nums else len(people)
+        if emp_n:
+            if emp_n <= 10:
+                sig["company_size"] = "micro_1_10"
+            elif emp_n <= 50:
+                sig["company_size"] = "small_11_50"
+            elif emp_n <= 200:
+                sig["company_size"] = "medium_51_200"
+            else:
+                sig["company_size"] = "large_201_plus"
+
+    correction_keys = (
+        "core_service", "fem_evidence", "project_complexity", "project_count_on_site",
+        "competitor_software", "people_found_count", "decision_makers_found", "company_size",
+        "has_bridges", "has_buildings", "has_geotech", "has_tunnels",
+        "has_foundations", "has_dams", "has_marine",
+    )
+    signal_corrections = []
+    for key in correction_keys:
+        before = original_sig.get(key)
+        after = sig.get(key)
+        if before != after and after not in (None, "", False):
+            signal_corrections.append({
+                "field": key,
+                "from": before,
+                "to": after,
+            })
 
     # ══ DETERMINISTIC SCORING — Python calculates, LLM only provides facts ══
 
@@ -910,18 +1101,29 @@ Website excerpt: {corpus[:4000]}""",
     # Total
     lead_score = max(0, min(100, rel + fem + buy + acc + cmp))
     overall = "Hot" if lead_score >= 70 else ("Warm" if lead_score >= 40 else "Cold")
+    evidence_summary = "; ".join(dict.fromkeys(fem_evidence_items or detected_labels)) or "no strong structural/FEM evidence detected"
+    structural_reason = f"Core: {core.replace('_',' ')}"
+    if detected_labels:
+        structural_reason += f"; evidence: {', '.join(detected_labels[:4])}"
+    else:
+        structural_reason += f"; {sum(proj_flags)} project type(s)"
+    fem_reason = f"FEM evidence: {fem_ev.replace('_',' ')}, complexity: {sig.get('project_complexity','unknown')}"
+    if fem_evidence_items:
+        fem_reason += f"; based on {', '.join(dict.fromkeys(fem_evidence_items[:4]))}"
 
     # Build breakdown
     sales_data["lead_score"] = lead_score
     sales_data["score_breakdown"] = {
-        "structural_relevance": {"score": rel, "reason": f"Core: {core.replace('_',' ')}, {sum(proj_flags)} project type(s)"},
-        "fem_need": {"score": fem, "reason": f"FEM evidence: {fem_ev.replace('_',' ')}, complexity: {sig.get('project_complexity','unknown')}"},
+        "structural_relevance": {"score": rel, "reason": structural_reason},
+        "fem_need": {"score": fem, "reason": fem_reason},
         "buying_signals": {"score": buy, "reason": f"Hiring structural: {sig.get('hiring_structural',False)}, projects: {pc}, expanding: {sig.get('expanding_offices',False)}"},
         "accessibility": {"score": acc, "reason": f"{ppl} people, decision makers: {sig.get('decision_makers_found',False)}, size: {sz.replace('_',' ')}"},
         "competitive_landscape": {"score": cmp, "reason": f"Software: {sig.get('competitor_software','unknown').replace('_',' ')}" + (f" ({', '.join(sig.get('competitor_names',[]))})" if sig.get('competitor_names') else "")}
     }
+    sales_data["score_evidence"] = list(dict.fromkeys(fem_evidence_items or detected_labels))
+    sales_data["signal_corrections"] = signal_corrections
     sales_data["overall_score"] = overall
-    sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Core: {core.replace('_',' ')}, FEM: {fem_ev.replace('_',' ')}, {ppl} people, software: {sig.get('competitor_software','unknown').replace('_',' ')}."
+    sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). {core.replace('_',' ').title()} with {fem_ev.replace('_',' ')}. Evidence: {evidence_summary}. {ppl} people found; software: {sig.get('competitor_software','unknown').replace('_',' ')}."
 
     if lead_score < 30:
         sales_data["recommended_products"] = []
@@ -1395,7 +1597,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
         if status_callback:
             status_callback("strategy", f"Building sales strategy...", 85)
 
-        sales_raw = analyze_sales(corpus + _extra_corpus[:5000], company_raw)
+        sales_raw = analyze_sales(corpus + _extra_corpus[:5000], json.dumps(_company_data))
         _sales_data = safe_json(sales_raw)
 
         if status_callback:
