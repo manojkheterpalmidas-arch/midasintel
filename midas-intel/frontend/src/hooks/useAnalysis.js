@@ -21,6 +21,7 @@ export function useAnalysis(apiBase) {
     try {
       const res = await fetch(`${apiBase}/api/analyse`, {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
       })
@@ -42,7 +43,7 @@ export function useAnalysis(apiBase) {
         if (!pollingRef.current) break
 
         try {
-          const pollRes = await fetch(`${apiBase}/api/jobs/${encodeURIComponent(domain)}`)
+          const pollRes = await fetch(`${apiBase}/api/jobs/${encodeURIComponent(domain)}`, { cache: 'no-store' })
           const job = await pollRes.json()
 
           if (jobId && job.status !== 'not_found' && job.job_id !== jobId) {
