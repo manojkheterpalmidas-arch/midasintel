@@ -1447,7 +1447,76 @@ def export_csv_route():
     )
 
 
-# ── WEBSOCKET: SINGLE ANALYSIS WITH PROGRESS ────────────────────────────────
+# ── IN-MEMORY JOB TRACKER ────────────────────────────────────────────────────
+# Tracks progress of running analysis jobs so the frontend can poll instead of WS
+
+from threading import Lock
+
+_jobs = {}  # domain -> {status, stage, message, progress, result, error}
+_jobs_lock = Lock()
+
+def _update_job(domain, **kwargs):
+    with _jobs_lock:
+        if domain not in _jobs:
+            _jobs[domain] = {}
+        _jobs[domain].update(kwargs)
+
+def _get_job(domain):
+    with _jobs_lock:
+        return _jobs.get(domain, {}).copy()
+
+def _clear_job(domain):
+    with _jobs_lock:
+        _jobs.pop(domain, None)
+
+
+@app.post("/api/analyse")
+def start_analysis(req: AnalyseRequest):
+    """Start analysis as a background job. Returns immediately.
+    Frontend polls GET /api/jobs/{domain} for progress, then GET /api/history/{domain} for results."""
+    url = req.url
+    if not url.startswith("http"):
+        url = "https://" + url
+    domain = extract_domain(url)
+
+    # Check if already running
+    existing_job = _get_job(domain)
+    if existing_job.get("status") == "running":
+        return {"status": "already_running", "domain": domain}
+
+    _update_job(domain, status="running", stage="starting", message="Starting...", progress=0, result=None, error=None)
+
+    def run_in_background():
+        def status_callback(stage, message, progress):
+            _update_job(domain, stage=stage, message=message, progress=progress)
+
+        entry, err = analyse_single_url(url, FIRECRAWL_KEY, status_callback=status_callback)
+        if entry:
+            _update_job(domain, status="complete", progress=100, message="Done!", result=entry, error=None)
+        else:
+            _update_job(domain, status="error", message=err or "Unknown error", error=err)
+
+    import threading
+    t = threading.Thread(target=run_in_background, daemon=True)
+    t.start()
+
+    return {"status": "started", "domain": domain}
+
+
+@app.get("/api/jobs/{domain}")
+def get_job_status(domain: str):
+    """Poll this endpoint for analysis progress."""
+    job = _get_job(domain)
+    if not job:
+        # No active job — check if result already exists in history
+        existing = find_in_history(domain)
+        if existing:
+            return {"status": "complete", "domain": domain, "progress": 100}
+        return {"status": "not_found", "domain": domain}
+    return {"domain": domain, **job}
+
+
+# ── WEBSOCKET: SINGLE ANALYSIS WITH PROGRESS (kept for backward compat) ───
 
 @app.websocket("/ws/analyse")
 async def ws_analyse(websocket: WebSocket):
