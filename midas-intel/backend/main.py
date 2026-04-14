@@ -2003,6 +2003,7 @@ def start_analysis(req: AnalyseRequest):
 
         entry, err = analyse_single_url(url, FIRECRAWL_KEY, status_callback=status_callback)
         if entry:
+            entry["job_id"] = job_id
             _update_job(domain, job_id=job_id, status="complete", progress=100, message="Done!", result=entry, error=None)
         else:
             _update_job(domain, job_id=job_id, status="error", message=err or "Unknown error", error=err)
