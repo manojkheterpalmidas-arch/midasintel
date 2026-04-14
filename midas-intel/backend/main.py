@@ -805,9 +805,11 @@ MIDAS NX Suite provides a complete structural and geotechnical engineering ecosy
 
 
 def analyze_sales(corpus, company_json):
-    return ask_deepseek(
+    """Two-phase: DeepSeek provides strategy + factual signals, Python calculates score."""
+    raw = ask_deepseek(
         f"You are a senior B2B sales strategist for MIDAS IT. Use the product knowledge below. Be specific and actionable. Respond in pure JSON, no markdown. Always respond in English.\n\n{MIDAS_PRODUCTS}",
-        f"""Return ONLY valid JSON:
+        f"""Return ONLY valid JSON with sales strategy AND factual scoring signals.
+
 {{
   "fem_opportunities": ["detailed specific use case 1", "use case 2", "use case 3"],
   "pain_points": ["specific pain point", "pain 2", "pain 3"],
@@ -819,74 +821,114 @@ def analyze_sales(corpus, company_json):
   "pre_meeting_mention": ["specific thing about their projects", "thing 2", "thing 3"],
   "smart_questions": ["specific question about their workflow", "question 2", "question 3"],
   "opening_line": "One strong personalised opening line",
-  "lead_score": 0-100,
-  "score_breakdown": {{
-    "structural_relevance": {{"score": 0-30, "reason": "one sentence why"}},
-    "fem_need": {{"score": 0-25, "reason": "one sentence why"}},
-    "buying_signals": {{"score": 0-20, "reason": "one sentence why"}},
-    "accessibility": {{"score": 0-15, "reason": "one sentence why"}},
-    "competitive_landscape": {{"score": 0-10, "reason": "one sentence why"}}
-  }},
-  "overall_score": "Hot|Warm|Cold",
-  "score_reason": "2-3 sentence reason for the score",
-  "recommended_products": ["CIVIL NX", "GEN NX", "FEA NX", "GTS NX"],
-  "product_reason": "3-4 sentence explanation of why these products fit"
+  "recommended_products": ["only from: CIVIL NX, GEN NX, FEA NX, GTS NX"],
+  "product_reason": "3-4 sentence explanation of why these products fit",
+
+  "signals": {{
+    "core_service": "structural_only|geotech_only|structural_and_geotech|multi_discipline_with_structural|civil_no_structural|not_engineering",
+    "project_complexity": "complex|moderate|simple|none",
+    "fem_evidence": "explicit_fem_mentioned|likely_fem_from_projects|possible_fem|no_fem",
+    "competitor_software": "none_detected|basic_tools_only|competitor_detected|locked_in",
+    "competitor_names": ["list any FEA/structural software mentioned"],
+    "company_size": "micro_1_10|small_11_50|medium_51_200|large_201_plus|unknown",
+    "people_found_count": 0,
+    "decision_makers_found": true,
+    "hiring_structural": false,
+    "hiring_any": false,
+    "recent_project_wins": false,
+    "expanding_offices": false,
+    "is_government_body": false,
+    "is_university": false,
+    "project_count_on_site": 0,
+    "has_bridges": false,
+    "has_buildings": false,
+    "has_geotech": false,
+    "has_tunnels": false,
+    "has_foundations": false,
+    "has_dams": false,
+    "has_marine": false
+  }}
 }}
 
-LEAD SCORING SYSTEM (0-100) — score each category independently then sum:
-
-1. STRUCTURAL / GEOTECHNICAL RELEVANCE (0-30 points)
-   How central is structural OR geotechnical engineering to their business?
-   - 25-30: Structural/geotech is their PRIMARY service (e.g. structural consultancy, bridge design firm, geotechnical investigation firm, ground engineering consultancy, foundation design specialist, tunnelling engineer)
-   - 15-24: Structural/geotech is ONE of several services (e.g. multi-discipline firm with structural or geotech dept)
-   - 5-14: They do related civil work but no direct structural/geotech analysis (e.g. contractor, infrastructure manager)
-   - 0-4: No structural or geotechnical engineering at all (e.g. surveying, traffic, environmental, planning, MEP)
-
-2. FEM/FEA/GEOTECH MODELLING NEED (0-25 points)
-   Evidence they need structural analysis or geotechnical modelling software?
-   - 20-25: Clear FEM/FEA/geotech modelling work — complex structures, bridges, nonlinear analysis, soil modelling, slope stability, foundation analysis, tunnel design, deep excavation analysis
-   - 12-19: Likely need — they do structural/geotech design but no explicit FEA evidence. Includes firms that produce geotechnical elaborates, soil investigation reports, or foundation recommendations (they currently use hand calculations or basic tools — GTS NX is an upgrade)
-   - 5-11: Possible need — some relevant projects but mainly simple/standard work
-   - 0-4: No FEM/geotech modelling need — no analysis involved in their work
-
-3. BUYING SIGNALS (0-20 points)
-   Evidence of active need or growth?
-   - 16-20: Hiring structural/geotech engineers, expanding, new office, large project wins
-   - 10-15: Some growth signals, active project pipeline, team building
-   - 5-9: Stable company, no strong growth signals
-   - 0-4: Shrinking, no hiring, no visible activity
-
-4. ACCESSIBILITY (0-15 points)
-   Can we reach decision-makers? Is the company approachable?
-   - 12-15: Key people identified with names and roles, small/medium firm, direct access likely
-   - 7-11: Some people found, medium firm, may need multiple touchpoints
-   - 3-6: Large corporation, hard to reach decision-makers, long sales cycle
-   - 0-2: No people found, government body, or unapproachable organisation
-
-5. COMPETITIVE LANDSCAPE (0-10 points)
-   What's their current software situation?
-   - 8-10: No competing FEA software detected — clean opportunity
-   - 4-7: Uses older/basic tools (Excel, simple frame analysis) — upgrade opportunity
-   - 1-3: Uses competing FEA software (LUSAS, STAAD, SAP2000, ETABS) — displacement sale needed
-   - 0: Locked into competitor ecosystem with long-term contracts
-
-OVERALL LABEL derived from lead_score:
-- Hot: 70-100 (strong structural firm with clear FEM needs)
-- Warm: 40-69 (some potential but gaps in relevance or accessibility)
-- Cold: 0-39 (no real FEM opportunity)
-
-CRITICAL SCORING INSTRUCTIONS:
-- Score EACH category independently based ONLY on the evidence for that category. Do NOT decide the overall score first and work backwards.
-- lead_score MUST equal the exact sum of all 5 category scores. Calculate it: structural_relevance + fem_need + buying_signals + accessibility + competitive_landscape = lead_score.
-- Two bridge design firms should NOT get the same score unless they have identical evidence. Differentiate based on specifics: one may have 12 people and complex projects (higher), another may have 3 people and simple projects (lower).
-- Use the FULL range of each scale. Not every good company is 25-28 in a category — some are 18, some are 22. Be precise.
-
-If lead_score is below 30, set recommended_products to [] and fem_opportunities to ["No direct FEM/FEA opportunities identified"].
+For signals: answer each field based ONLY on evidence from the data. If unsure, pick the conservative option. Do not guess or inflate.
 
 Company data: {company_json}
 Website excerpt: {corpus[:4000]}""",
         max_tokens=4000
     )
+
+    sales_data = safe_json(raw)
+    sig = sales_data.get("signals", {})
+
+    # ══ DETERMINISTIC SCORING — Python calculates, LLM only provides facts ══
+
+    # Category 1: Structural/Geotech Relevance (0-30)
+    core = sig.get("core_service", "not_engineering")
+    rel_base = {"structural_and_geotech": 28, "structural_only": 26, "geotech_only": 25,
+                "multi_discipline_with_structural": 18, "civil_no_structural": 7, "not_engineering": 1}
+    rel = rel_base.get(core, 4)
+    proj_flags = [sig.get(k, False) for k in ("has_bridges","has_buildings","has_geotech","has_tunnels","has_foundations","has_dams","has_marine")]
+    rel = min(30, rel + sum(proj_flags))
+
+    # Category 2: FEM/FEA Need (0-25)
+    fem_ev = sig.get("fem_evidence", "no_fem")
+    fem_base = {"explicit_fem_mentioned": 22, "likely_fem_from_projects": 16, "possible_fem": 9, "no_fem": 1}
+    fem = fem_base.get(fem_ev, 4)
+    fem = min(25, fem + {"complex": 3, "moderate": 1, "simple": 0, "none": 0}.get(sig.get("project_complexity", "none"), 0))
+
+    # Category 3: Buying Signals (0-20)
+    buy = 3
+    if sig.get("hiring_structural"): buy += 5
+    elif sig.get("hiring_any"): buy += 2
+    if sig.get("recent_project_wins"): buy += 4
+    if sig.get("expanding_offices"): buy += 3
+    pc = sig.get("project_count_on_site", 0) or 0
+    if pc > 20: buy += 4
+    elif pc > 10: buy += 3
+    elif pc > 5: buy += 2
+    elif pc > 0: buy += 1
+    buy = min(20, buy)
+
+    # Category 4: Accessibility (0-15)
+    acc = 3
+    ppl = sig.get("people_found_count", 0) or 0
+    if ppl >= 10: acc += 3
+    elif ppl >= 5: acc += 4
+    elif ppl >= 2: acc += 5
+    elif ppl >= 1: acc += 3
+    if sig.get("decision_makers_found"): acc += 3
+    sz = sig.get("company_size", "unknown")
+    if sz in ("micro_1_10", "small_11_50"): acc += 2
+    elif sz == "large_201_plus": acc -= 2
+    if sig.get("is_government_body"): acc -= 4
+    if sig.get("is_university"): acc += 1
+    acc = max(0, min(15, acc))
+
+    # Category 5: Competitive Landscape (0-10)
+    cmp = {"none_detected": 9, "basic_tools_only": 6, "competitor_detected": 3, "locked_in": 1}.get(sig.get("competitor_software", "none_detected"), 5)
+
+    # Total
+    lead_score = max(0, min(100, rel + fem + buy + acc + cmp))
+    overall = "Hot" if lead_score >= 70 else ("Warm" if lead_score >= 40 else "Cold")
+
+    # Build breakdown
+    sales_data["lead_score"] = lead_score
+    sales_data["score_breakdown"] = {
+        "structural_relevance": {"score": rel, "reason": f"Core: {core.replace('_',' ')}, {sum(proj_flags)} project type(s)"},
+        "fem_need": {"score": fem, "reason": f"FEM evidence: {fem_ev.replace('_',' ')}, complexity: {sig.get('project_complexity','unknown')}"},
+        "buying_signals": {"score": buy, "reason": f"Hiring structural: {sig.get('hiring_structural',False)}, projects: {pc}, expanding: {sig.get('expanding_offices',False)}"},
+        "accessibility": {"score": acc, "reason": f"{ppl} people, decision makers: {sig.get('decision_makers_found',False)}, size: {sz.replace('_',' ')}"},
+        "competitive_landscape": {"score": cmp, "reason": f"Software: {sig.get('competitor_software','unknown').replace('_',' ')}" + (f" ({', '.join(sig.get('competitor_names',[]))})" if sig.get('competitor_names') else "")}
+    }
+    sales_data["overall_score"] = overall
+    sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Core: {core.replace('_',' ')}, FEM: {fem_ev.replace('_',' ')}, {ppl} people, software: {sig.get('competitor_software','unknown').replace('_',' ')}."
+
+    if lead_score < 30:
+        sales_data["recommended_products"] = []
+        sales_data["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
+
+    sales_data.pop("signals", None)
+    return json.dumps(sales_data)
 
 
 def generate_email_text(company_data, sales_data):
