@@ -184,6 +184,63 @@ def extract_employee_count_from_text(text):
             return f"{count} employees"
     return ""
 
+def extract_locations_from_text(text):
+    if not text:
+        return []
+    normalized = re.sub(r"\s+", " ", text)
+    locations = []
+    seen = set()
+
+    def add_location(value):
+        value = re.sub(r"\s+", " ", value or "").strip(" ,.-")
+        if not value:
+            return
+        key = value.lower()
+        if key not in seen:
+            seen.add(key)
+            locations.append(value)
+
+    uk_postcode = r"[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}"
+    uk_street_address_pattern = re.compile(
+        rf"\d{{1,5}}\s+[A-Za-z0-9' .-]+?\b(?:road|street|lane|avenue|drive|close|way|place|park|court|yard)\b\s+"
+        rf"([A-Za-z' .-]{{2,35}}?)\s+"
+        rf"([A-Za-z' .-]{{2,35}}?)\s+"
+        rf"(?:United Kingdom|UK|England|Scotland|Wales)\s*{uk_postcode}",
+        re.IGNORECASE,
+    )
+    for match in uk_street_address_pattern.finditer(normalized):
+        town = (match.group(1) or "").strip().title()
+        county = (match.group(2) or "").strip().title()
+        add_location(f"{town}, {county}, United Kingdom")
+
+    address_pattern = re.compile(
+        rf"(\d{{1,5}}\s+[A-Za-z0-9' .-]+?\s+"
+        rf"([A-Z][A-Za-z' .-]{{2,40}})\s+"
+        rf"([A-Z][A-Za-z' .-]{{2,40}})?\s*"
+        rf"(?:United Kingdom|UK|England|Scotland|Wales)?\s*{uk_postcode})",
+        re.IGNORECASE,
+    )
+    for match in address_pattern.finditer(normalized):
+        town = (match.group(2) or "").strip()
+        county = (match.group(3) or "").strip()
+        if re.search(r"\b(road|street|lane|avenue|drive|close|way|place|park|court|yard)\b", town, re.IGNORECASE):
+            continue
+        if county and not re.search(r"united kingdom|england|scotland|wales|uk", county, re.IGNORECASE):
+            add_location(f"{town}, {county.title()}, United Kingdom")
+        else:
+            add_location(f"{town}, United Kingdom")
+
+    city_country_pattern = re.compile(
+        r"\b([A-Z][A-Za-z' .-]{2,40})\s*,?\s+(United Kingdom|UK|England|Scotland|Wales)\b",
+        re.IGNORECASE,
+    )
+    for match in city_country_pattern.finditer(normalized):
+        city = match.group(1).strip()
+        if len(city.split()) <= 4 and not re.search(r"\b(road|street|lane|email|phone|welcome)\b", city, re.IGNORECASE):
+            add_location(f"{city.title()}, United Kingdom")
+
+    return locations[:5]
+
 
 # ── CRAWLING ─────────────────────────────────────────────────────────────────
 
@@ -1596,6 +1653,11 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None, should_
             fb_emp = extract_employee_count_from_text(_extra_corpus)
             if fb_emp and fb_emp != rejected_employee_count:
                 _company_data["employee_count"] = fb_emp
+
+        if not _company_data.get("locations"):
+            fallback_locations = extract_locations_from_text(corpus + "\n" + _extra_corpus)
+            if fallback_locations:
+                _company_data["locations"] = fallback_locations
 
         # ── STEP 4: Sales strategy ──
         if status_callback:
