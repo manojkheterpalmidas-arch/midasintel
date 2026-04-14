@@ -44,14 +44,17 @@ export function SearchBar({ onAnalyse, analysing, progress, progressMessage, sta
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     setExisting(null)
+    if (analysing) return
 
     const domain = extractDomain(url)
     if (!domain || domain === activeReport?.domain) return
+    let cancelled = false
 
     debounceRef.current = setTimeout(async () => {
       setChecking(true)
       try {
         const res = await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`)
+        if (cancelled) return
         if (res.ok) {
           const data = await res.json()
           setExisting(data)
@@ -59,13 +62,17 @@ export function SearchBar({ onAnalyse, analysing, progress, progressMessage, sta
           setExisting(null)
         }
       } catch {
+        if (cancelled) return
         setExisting(null)
       }
       setChecking(false)
     }, 400)
 
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [url, apiBase, activeReport?.domain])
+    return () => {
+      cancelled = true
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [url, apiBase, activeReport?.domain, analysing])
 
   const handleSubmit = (e) => {
     e.preventDefault()
