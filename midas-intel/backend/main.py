@@ -594,31 +594,157 @@ Website content:
 MIDAS_PRODUCTS = """
 MIDAS NX PRODUCT SUITE — FULL SALES KNOWLEDGE BASE
 
+════════════════════════════════════════════════
 1. MIDAS CIVIL NX — Bridges & Civil Infrastructure
-   Structural analysis and design for bridges and civil infrastructure.
+════════════════════════════════════════════════
+WHAT IT IS: Next-generation structural analysis and design software specialised for bridges and civil infrastructure. Combines advanced FEA, automation, and integrated design workflows.
 
-2. MIDAS GEN NX — Building & General Structures
-   Building structural design with automated workflows.
+WHAT IT DOES:
+- Structural modelling and analysis (static, dynamic, seismic, nonlinear, time-history)
+- Construction stage simulation — analyse structures at every phase of build
+- Moving load and traffic simulation — vehicles across bridges, stress/deflection/safety
+- Design and code checking — international standards, automated compliance verification
+- Automation and parametric workflows — Excel-based model generation, API, batch processing
+- BIM interoperability and integration with other MIDAS tools
 
-3. MIDAS FEA NX — Advanced Nonlinear Analysis
-   Detailed local analysis — connections, joints, bearings, anchorages.
+KEY CAPABILITIES:
+- Linear and nonlinear analysis including large displacement and material nonlinearity
+- Seismic and pushover analysis
+- Pre-built templates for bridges, culverts, and infrastructure
+- Auto-meshing, fast post-processing, detailed reporting
+- Moving loads, construction loads, environmental loads (temperature, seismic)
+- Excel integration and API/plugin ecosystem
 
+TYPICAL USE CASES:
+- Cable-stayed, suspension, PSC, and steel bridge design and validation
+- Highway and railway bridges with traffic load simulation
+- Construction stage analysis for segmental construction and temporary supports
+- Earthquake response studies and time-dependent behaviour
+- Water treatment facilities and underground/industrial structures
+- Parametric design optimisation and bulk scenario analysis
+
+VALUE PROPOSITION: High accuracy FEA + automation + specialised bridge focus = complete bridge design lifecycle in one platform.
+POSITIONING: Best global analysis tool for bridge and infrastructure firms.
+
+════════════════════════════════════════════════
+2. MIDAS GEN NX — Buildings & General Structures
+════════════════════════════════════════════════
+WHAT IT IS: Next-generation structural analysis and design platform for buildings and general structures. Integrates modelling, analysis, design, and automation in one environment.
+
+WHAT IT DOES:
+- Models RC, steel, and composite structures
+- Static, dynamic, seismic, and nonlinear analysis
+- Building design and code compliance — international design codes, automated steel and RC design
+- Integrated workflow: Modelling → Analysis → Design in one platform
+- Automation via Excel, Grasshopper, and API for custom workflows
+- AI-assisted workflow with built-in guidance and smart tools
+
+KEY CAPABILITIES:
+- 4K-ready modern UI with customisable toolbars
+- Advanced FEA with fast solver
+- Automated design optimisation for cost and material efficiency
+- Pushover analysis and nonlinear time-history for seismic design
+- Excel-driven parametric workflows and Grasshopper integration
+- Auto-generated reports and calculations
+
+TYPICAL USE CASES:
+- High-rise, residential, and commercial building design
+- Steel, RC, and composite structure engineering
+- Earthquake-resistant seismic design
+- Batch processing and parametric design optimisation
+- Industrial structures — factories and plants
+
+VALUE PROPOSITION: Efficiency through automation + accuracy through advanced analysis + modern usability = integrated building design workflow.
+POSITIONING: Best global design tool for building and general structure firms.
+
+════════════════════════════════════════════════
+3. MIDAS FEA NX — Detailed Local & Nonlinear Analysis
+════════════════════════════════════════════════
+WHAT IT IS: High-end finite element analysis software designed for detailed, local, and nonlinear analysis of civil and structural systems. Used when global tools are not sufficient.
+
+WHAT IT DOES:
+- 2D and 3D element modelling (plates, solids) for complex geometry
+- Advanced linear and nonlinear analysis — material nonlinearity, cracking, yielding, large deformation
+- CAD-based modelling with import from AutoCAD, SolidWorks, STEP, IGES
+- Automatic, mapped, and hybrid mesh generation
+- Multi-physics analysis — structural, geotechnical, crack, fatigue, buckling, thermal
+- Integrates with CIVIL NX and GEN NX for global-to-local workflows
+
+KEY CAPABILITIES:
+- Crack modelling, contact and interface behaviour, plasticity and failure simulation
+- High-quality meshing for accurate geometry representation
+- 3D solid and plate modelling for detailed joints, anchors, and connections
+- Stress contours, crack visualisation, deformation plots
+- Parallel computing for large models
+- Modern UI for faster preprocessing and postprocessing
+
+TYPICAL USE CASES:
+- Steel connections, anchor zones, bridge joints
+- Deep beams, shear walls, slabs
+- Bridge local analysis — anchorage zones, bearings
+- Geotechnical analysis — foundations, soil-structure interaction details
+- Failure analysis — concrete cracking, fatigue
+- Nonlinear problems — large deformation, contact problems
+
+VALUE PROPOSITION: High accuracy for complex local analysis that global tools cannot handle. Seamless integration with CIVIL NX and GEN NX.
+POSITIONING: Detailed local analysis tool — always pairs with CIVIL NX or GEN NX.
+
+════════════════════════════════════════════════
 4. MIDAS GTS NX — Geotechnical Analysis
-   Soil, rock, underground engineering — tunnels, foundations, slopes.
+════════════════════════════════════════════════
+WHAT IT IS: Geotechnical analysis software for soil, rock, and underground engineering problems. Focuses on ground behaviour, soil-structure interaction, and construction processes.
 
-CROSS-SELL LOGIC:
-- Bridge/infrastructure → CIVIL NX + FEA NX
-- Building/structural → GEN NX + FEA NX
-- Geotechnical/ground → GTS NX + CIVIL NX
-- Mixed civil → CIVIL NX + GEN NX + FEA NX
-- Full service → Full suite
-- Metro/tunnelling → GTS NX + CIVIL NX
+WHAT IT DOES:
+- 2D and 3D FEA of soil and rock behaviour — deformation, stress, stability
+- Soil-structure interaction — foundations, retaining walls, tunnels
+- Excavation and construction stage analysis — staged construction, deep excavation, tunnelling
+- Groundwater and seepage analysis — water flow through soil, hydrostatic pressure
+- Dynamic and seismic analysis — earthquake response, vibration
+- CAD-based 2D/3D modelling with CAD import
 
-COMPETITIVE POSITIONING:
-- vs LUSAS/STAAD/SAP2000 → Better automation, modern UI
-- vs PLAXIS → Better BIM integration
-- vs ETABS → More automation and parametric design
-- vs ANSYS/ABAQUS → More accessible for civil engineers
+KEY CAPABILITIES:
+- Advanced material models — elastic and nonlinear soil behaviour
+- High-quality automatic and hybrid mesh generation for geotechnical problems
+- 3D terrain modelling from borehole data with layered soil modelling
+- Static, nonlinear, dynamic, construction stage, and slope stability analysis
+- Contours, deformation, vectors — full ground behaviour visualisation
+- Automated result reports with Excel export
+
+TYPICAL USE CASES:
+- Foundation engineering — shallow and deep foundations, pile analysis
+- Metro tunnels and underground caverns
+- Deep excavation projects and retaining structures
+- Slope stability — landslides and open pit mining
+- Dam engineering and seepage analysis
+- Soil-structure interaction for buildings and bridges
+
+VALUE PROPOSITION: Accurate soil and rock modelling + advanced geotechnical capabilities + full ground engineering coverage.
+POSITIONING: Essential for any firm doing geotechnical, tunnelling, underground, or foundation work.
+
+════════════════════════════════════════════════
+CROSS-SELL LOGIC — MATCH TO COMPANY TYPE
+════════════════════════════════════════════════
+- Bridge/infrastructure firm → CIVIL NX (primary) + FEA NX (local detailing)
+- Building/structural firm → GEN NX (primary) + FEA NX (connection design)
+- Geotechnical/ground firm → GTS NX (primary) + CIVIL NX (structure interaction)
+- Mixed civil firm (bridges + buildings) → CIVIL NX + GEN NX + FEA NX
+- Full service firm (all disciplines) → Full suite: CIVIL NX + GEN NX + FEA NX + GTS NX
+- Metro/tunnelling firm → GTS NX + CIVIL NX
+- Consulting/advisory firm → Start with CIVIL NX or GEN NX depending on focus
+
+════════════════════════════════════════════════
+COMPETITIVE POSITIONING
+════════════════════════════════════════════════
+- vs LUSAS/STAAD/SAP2000 → MIDAS offers better automation, modern UI, and construction stage analysis
+- vs PLAXIS → GTS NX is directly competitive, with better BIM integration and CAD workflow
+- vs ETABS → GEN NX offers more automation and parametric design capabilities
+- vs ANSYS/ABAQUS → FEA NX is more accessible for civil engineers with civil-specific workflows
+- No existing FEA software detected → Clean opportunity, position as first professional FEA platform
+
+════════════════════════════════════════════════
+ONE-LINE MASTER PITCH
+════════════════════════════════════════════════
+MIDAS NX Suite provides a complete structural and geotechnical engineering ecosystem — from global bridge and building design to detailed local analysis and ground engineering — all within one integrated, automated workflow.
 """
 
 
@@ -640,11 +766,11 @@ def analyze_sales(corpus, company_json):
   "overall_score": "Hot|Warm|Cold",
   "score_reason": "2-3 sentence reason for the score",
   "recommended_products": ["CIVIL NX", "GEN NX", "FEA NX", "GTS NX"],
-  "product_reason": "3-4 sentence explanation of why these products fit"
+  "product_reason": "1-2 sentence each for the product seperately explanation of why this products fits"
 }}
 Company data: {company_json}
 Website excerpt: {corpus[:4000]}""",
-        max_tokens=4000
+        max_tokens=8000
     )
 
 
