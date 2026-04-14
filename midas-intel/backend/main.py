@@ -1522,6 +1522,8 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
             _company_data["employee_count"] = gd_emp
             _emp_from_structured = True
 
+        rejected_employee_count = ""
+
         # Sanity check: if the website only has a handful of people listed
         # but the employee count says 500+, it's almost certainly a wrong-company match.
         # Small engineering consultancies don't have 500+ staff with only 3-5 people on their site.
@@ -1533,6 +1535,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
             first_num = int(emp_nums[0]) if emp_nums else 0
             if people_on_site <= 10 and first_num >= 200:
                 # Very likely wrong company — clear the count, let DeepSeek decide from site content
+                rejected_employee_count = _company_data.get("employee_count", "")
                 _company_data["employee_count"] = ""
                 _emp_from_structured = False
 
@@ -1591,7 +1594,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None):
 
         if not _company_data.get("employee_count"):
             fb_emp = extract_employee_count_from_text(_extra_corpus)
-            if fb_emp:
+            if fb_emp and fb_emp != rejected_employee_count:
                 _company_data["employee_count"] = fb_emp
 
         # ── STEP 4: Sales strategy ──
