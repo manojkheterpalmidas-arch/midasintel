@@ -2060,6 +2060,8 @@ def start_analysis(req: AnalyseRequest):
         url = "https://" + url
     domain = extract_domain(url)
 
+    delete_from_history(domain)
+
     job_id = uuid.uuid4().hex
     _start_job(domain, job_id, status="running", stage="starting", message="Starting...", progress=0, result=None, error=None)
 
@@ -2206,6 +2208,8 @@ async def ws_batch(websocket: WebSocket):
                             "progress": completed / total * 100
                         })
                         continue
+                else:
+                    delete_from_history(d)
 
                 status_queue = []
 
