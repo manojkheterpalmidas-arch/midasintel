@@ -53,7 +53,7 @@ export function SearchBar({ onAnalyse, analysing, progress, progressMessage, sta
     debounceRef.current = setTimeout(async () => {
       setChecking(true)
       try {
-        const res = await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`)
+        const res = await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`, { cache: 'no-store' })
         if (cancelled) return
         if (res.ok) {
           const data = await res.json()
