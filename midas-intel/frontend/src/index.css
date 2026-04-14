@@ -297,13 +297,14 @@ html, body, #root {
 
 .score-bar-row {
   display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
 }
 .score-bar-label {
   font-size: 12px; color: var(--muted); width: 140px; flex-shrink: 0;
 }
 .score-bar-track {
   flex: 1; height: 8px; background: var(--border-light);
-  border-radius: 4px; overflow: hidden;
+  border-radius: 4px; overflow: hidden; min-width: 80px;
 }
 .score-bar-fill {
   height: 100%; border-radius: 4px;
@@ -312,6 +313,10 @@ html, body, #root {
 .score-bar-value {
   font-size: 11px; font-family: var(--mono); color: var(--muted);
   width: 36px; text-align: right; flex-shrink: 0;
+}
+.score-bar-reason {
+  width: 100%; font-size: 11px; color: var(--hint);
+  padding-left: 150px; margin-top: -4px; margin-bottom: 4px; line-height: 1.4;
 }
 
 .pill-tag {
