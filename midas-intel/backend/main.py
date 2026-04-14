@@ -184,6 +184,10 @@ def extract_employee_count_from_text(text):
             return f"{count} employees"
     return ""
 
+def employee_count_floor(employee_count):
+    nums = re.findall(r"[\d,]+", str(employee_count or "").replace(",", ""))
+    return int(nums[0]) if nums else 0
+
 def extract_locations_from_text(text):
     if not text:
         return []
@@ -1610,9 +1614,7 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None, should_
         if _emp_from_structured:
             people_on_site = len(_company_data.get("people", []))
             emp_str = _company_data.get("employee_count", "")
-            # Extract the first number from the employee string for comparison
-            emp_nums = re.findall(r'[\d,]+', emp_str.replace(",", ""))
-            first_num = int(emp_nums[0]) if emp_nums else 0
+            first_num = employee_count_floor(emp_str)
             if people_on_site <= 10 and first_num >= 200:
                 # Very likely wrong company — clear the count, let DeepSeek decide from site content
                 rejected_employee_count = _company_data.get("employee_count", "")
@@ -1676,12 +1678,20 @@ def analyse_single_url(website_url, firecrawl_key, status_callback=None, should_
             fb_emp = extract_employee_count_from_text(_extra_corpus)
             if fb_emp and fb_emp != rejected_employee_count:
                 _company_data["employee_count"] = fb_emp
+        final_emp_floor = employee_count_floor(_company_data.get("employee_count"))
+        if len(_company_data.get("people", [])) <= 10 and final_emp_floor >= 200:
+            _company_data["employee_count"] = ""
 
         _company_data["locations"] = clean_locations(_company_data.get("locations", []))
-        if not _company_data.get("locations"):
-            fallback_locations = clean_locations(extract_locations_from_text(corpus + "\n" + _extra_corpus))
-            if fallback_locations:
-                _company_data["locations"] = fallback_locations
+        site_locations = clean_locations(extract_locations_from_text(corpus))
+        if site_locations:
+            _company_data["locations"] = site_locations
+        else:
+            _company_data["locations"] = clean_locations(_company_data.get("locations", []))
+            if not _company_data.get("locations"):
+                fallback_locations = clean_locations(extract_locations_from_text(_extra_corpus))
+                if fallback_locations:
+                    _company_data["locations"] = fallback_locations
 
         # ── STEP 4: Sales strategy ──
         if status_callback:
