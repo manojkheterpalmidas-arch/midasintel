@@ -34,6 +34,7 @@ export default function App() {
   }, [])
 
   const handleAnalyse = async (url) => {
+    setActiveReport(null)
     const result = await startAnalysis(url)
     if (result) {
       setActiveReport(result)
