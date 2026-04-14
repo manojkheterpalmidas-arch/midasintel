@@ -1,133 +1,99 @@
 import { useState, useCallback, useRef } from 'react'
 
+function websocketUrl(apiBase) {
+  const base = apiBase.replace(/\/$/, '')
+  if (base.startsWith('https://')) return base.replace('https://', 'wss://')
+  if (base.startsWith('http://')) return base.replace('http://', 'ws://')
+  return base
+}
+
 export function useAnalysis(apiBase) {
   const [analysing, setAnalysing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState('')
   const [stage, setStage] = useState('')
   const [error, setError] = useState(null)
-  const pollingRef = useRef(false)
-  const notFoundCount = useRef(0)
+  const wsRef = useRef(null)
 
   const startAnalysis = useCallback(async (url) => {
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+
     setAnalysing(true)
     setProgress(0)
     setProgressMessage('Starting...')
     setStage('starting')
     setError(null)
-    pollingRef.current = true
-    notFoundCount.current = 0
 
-    try {
-      const res = await fetch(`${apiBase}/api/analyse`, {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      })
-      const data = await res.json()
+    return new Promise((resolve) => {
+      const ws = new WebSocket(`${websocketUrl(apiBase)}/ws/analyse`)
+      wsRef.current = ws
+      let finished = false
 
-      if (data.status === 'error') {
+      const finish = (result) => {
+        if (finished) return
+        finished = true
+        wsRef.current = null
         setAnalysing(false)
-        setError(data.message || 'Failed to start analysis')
-        setStage('error')
-        pollingRef.current = false
-        return null
+        resolve(result)
       }
 
-      const domain = data.domain
-      const jobId = data.job_id
-      let historyFallbackCount = 0
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ url }))
+      }
 
-      while (pollingRef.current) {
-        await new Promise(r => setTimeout(r, 1500))
-        if (!pollingRef.current) break
-
+      ws.onmessage = (event) => {
         try {
-          const pollRes = await fetch(`${apiBase}/api/jobs/${encodeURIComponent(domain)}`, { cache: 'no-store' })
-          const job = await pollRes.json()
+          const msg = JSON.parse(event.data)
 
-          if (jobId && job.status !== 'not_found' && job.job_id !== jobId) {
-            setProgressMessage('Waiting for fresh re-crawl...')
-            continue
+          if (msg.type === 'progress') {
+            setProgress(msg.progress || 0)
+            setProgressMessage(msg.message || '')
+            setStage(msg.stage || 'working')
+            return
           }
 
-          if (job.status === 'running') {
-            notFoundCount.current = 0
-            setProgress(job.progress || 0)
-            setProgressMessage(job.message || '')
-            setStage(job.stage || 'working')
-
-          } else if (job.status === 'complete') {
+          if (msg.type === 'complete') {
             setProgress(100)
             setProgressMessage('Complete!')
             setStage('complete')
-            pollingRef.current = false
-
-            if (job.result && (!jobId || job.result.job_id === jobId)) {
-              setAnalysing(false)
-              return job.result
-            }
-
-            setAnalysing(false)
-            setError('Analysis completed but fresh report was not returned')
-            return null
-
-          } else if (job.status === 'error') {
-            setAnalysing(false)
-            setError(job.error || job.message || 'Analysis failed')
-            setStage('error')
-            pollingRef.current = false
-            return null
-
-          } else if (job.status === 'not_found') {
-            notFoundCount.current += 1
-
-            if (notFoundCount.current <= 5) {
-              setProgressMessage('Waiting for fresh re-crawl...')
-              continue
-            }
-
-            historyFallbackCount += 1
-            setProgressMessage('Finishing fresh report...')
-            try {
-              const reportRes = await fetch(`${apiBase}/api/history/${encodeURIComponent(domain)}`, { cache: 'no-store' })
-              if (reportRes.ok) {
-                const report = await reportRes.json()
-                setAnalysing(false)
-                setProgress(100)
-                setStage('complete')
-                pollingRef.current = false
-                return report
-              }
-            } catch {}
-
-            if (historyFallbackCount > 40) {
-              setAnalysing(false)
-              setError('Fresh re-crawl is still running or was interrupted. Please refresh and check history.')
-              pollingRef.current = false
-              return null
-            }
+            finish(msg.data || null)
+            return
           }
-        } catch (pollErr) {
-          setProgressMessage('Reconnecting...')
+
+          if (msg.type === 'error') {
+            setStage('error')
+            setError(msg.message || 'Analysis failed')
+            finish(null)
+          }
+        } catch {
+          setProgressMessage('Receiving analysis update...')
         }
       }
 
-      setAnalysing(false)
-      return null
+      ws.onerror = () => {
+        setStage('error')
+        setError('Analysis connection failed. Please try again.')
+        finish(null)
+      }
 
-    } catch (err) {
-      setAnalysing(false)
-      setError('Failed to connect to backend')
-      setStage('error')
-      pollingRef.current = false
-      return null
-    }
+      ws.onclose = () => {
+        if (!finished) {
+          setStage('error')
+          setError('Analysis connection closed before completion. Please try again.')
+          finish(null)
+        }
+      }
+    })
   }, [apiBase])
 
   const cancelAnalysis = useCallback(() => {
-    pollingRef.current = false
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
     setAnalysing(false)
     setStage('')
     setProgressMessage('')
