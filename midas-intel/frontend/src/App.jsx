@@ -49,6 +49,7 @@ export default function App() {
   }
 
   const handleLoadReport = (report) => {
+    if (analysing) return
     setActiveReport(report)
   }
 
