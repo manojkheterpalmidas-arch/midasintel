@@ -1059,7 +1059,11 @@ Website excerpt: {corpus[:4000]}""",
 
     bridge_terms = ("bridge", "viaduct", "flyover", "highway", "railway", "rail", "transport infrastructure")
     building_terms = ("building", "residential", "commercial", "mixed-use", "mixed use", "high-rise", "housing")
-    geotech_terms = ("geotechnical", "ground engineering", "soil", "slope", "retaining", "basement", "excavation", "earthworks")
+    geotech_terms = ("geotechnical", "ground engineering", "soil mechanics", "soil-structure",
+                     "slope stability", "retaining wall design", "deep excavation",
+                     "geotechnical design", "geotechnical analysis", "ground investigation",
+                     "geotechnical investigation", "borehole", "triaxial", "consolidation",
+                     "bearing capacity", "earth pressure", "earthworks design")
     tunnel_terms = ("tunnel", "tunnelling", "underground", "metro")
     foundation_terms = ("foundation", "piling", "pile", "underpinning")
     dam_terms = ("dam", "reservoir", "embankment")
@@ -1075,6 +1079,8 @@ Website excerpt: {corpus[:4000]}""",
         "drone survey", "uav survey", "aerial survey", "geomatics", "geospatial",
         "mapping", "setting out", "site survey", "boundary survey", "as-built survey",
         "surveying services", "survey company", "surveyors",
+        "geodetic", "geodesy", "geodetske", "geoprostorne", "gnss", "total station",
+        "cadastral", "cadastre", "land registry", "staking out", "deformation monitoring",
     )
     civil_design_no_fem_terms = (
         "highway design", "highways design", "road design", "roads design",
@@ -1094,8 +1100,9 @@ Website excerpt: {corpus[:4000]}""",
     non_engineering_terms = ("marketing agency", "law firm", "accountancy", "restaurant", "retail shop")
 
     survey_only = has_any(survey_terms) and not has_any(analysis_design_terms)
+    geodetic_only = has_any(("geodetic", "geodesy", "geodetske", "geoprostorne")) and not has_any(analysis_design_terms)
     civil_design_no_fem_only = has_any(civil_design_no_fem_terms) and not has_any(analysis_design_terms)
-    non_fem_civil_only = survey_only or civil_design_no_fem_only
+    non_fem_civil_only = survey_only or geodetic_only or civil_design_no_fem_only
     type_blob = " ".join(project_types)
     has_bridges = has_any(bridge_terms) or "bridge" in type_blob
     has_buildings = has_any(building_terms) or any(t in type_blob for t in ("building", "residential", "industrial"))
@@ -1190,7 +1197,7 @@ Website excerpt: {corpus[:4000]}""",
     elif has_bridges or has_buildings or has_any(structural_terms):
         if sig.get("core_service") in (None, "", "not_engineering", "civil_no_structural"):
             sig["core_service"] = "structural_only"
-    elif has_any(("civil engineering", "infrastructure", "engineering consultancy")) and not has_any(non_engineering_terms):
+    elif has_any(("civil engineering", "infrastructure", "engineering consultancy")) and not has_any(non_engineering_terms) and not has_any(survey_terms):
         if sig.get("core_service") in (None, "", "not_engineering"):
             sig["core_service"] = "multi_discipline_with_structural"
 
@@ -1324,8 +1331,8 @@ Website excerpt: {corpus[:4000]}""",
         sales_data["recommended_products"] = []
         sales_data["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
         if non_fem_civil_only:
-            if survey_only:
-                sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Surveying/geospatial company with no structural, geotechnical design, or FEM analysis evidence."
+            if survey_only or geodetic_only:
+                sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Surveying/geodetic company with no structural, geotechnical design, or FEM analysis evidence."
             else:
                 sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Highway/alignment design company with no structural, geotechnical design, or FEM analysis evidence."
 
