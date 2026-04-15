@@ -1069,8 +1069,33 @@ Website excerpt: {corpus[:4000]}""",
         "civil engineer", "civil engineering", "temporary works", "steelwork",
         "reinforced concrete", "rc frame", "frame design", "facade engineering",
     )
+    survey_terms = (
+        "land survey", "land surveying", "topographical survey", "topographic survey",
+        "measured building survey", "utility survey", "laser scanning", "3d scanning",
+        "drone survey", "uav survey", "aerial survey", "geomatics", "geospatial",
+        "mapping", "setting out", "site survey", "boundary survey", "as-built survey",
+        "surveying services", "survey company", "surveyors",
+    )
+    civil_design_no_fem_terms = (
+        "highway design", "highways design", "road design", "roads design",
+        "alignment design", "horizontal alignment", "vertical alignment",
+        "highway alignment", "road alignment", "route alignment",
+        "corridor design", "junction design", "roundabout design",
+        "road geometry", "geometric design", "civil 3d corridor",
+        "road drainage", "highway drainage", "s278", "section 278",
+        "s38", "section 38", "pavement design",
+    )
+    analysis_design_terms = (
+        "structural design", "structural analysis", "finite element", "fea", "fem",
+        "geotechnical design", "ground engineering", "soil-structure", "slope stability",
+        "foundation design", "piling design", "retaining wall design", "tunnel design",
+        "bridge design", "seismic design", "nonlinear analysis", "non-linear analysis",
+    )
     non_engineering_terms = ("marketing agency", "law firm", "accountancy", "restaurant", "retail shop")
 
+    survey_only = has_any(survey_terms) and not has_any(analysis_design_terms)
+    civil_design_no_fem_only = has_any(civil_design_no_fem_terms) and not has_any(analysis_design_terms)
+    non_fem_civil_only = survey_only or civil_design_no_fem_only
     type_blob = " ".join(project_types)
     has_bridges = has_any(bridge_terms) or "bridge" in type_blob
     has_buildings = has_any(building_terms) or any(t in type_blob for t in ("building", "residential", "industrial"))
@@ -1079,6 +1104,8 @@ Website excerpt: {corpus[:4000]}""",
     has_foundations = has_any(foundation_terms) or "foundation" in type_blob
     has_dams = has_any(dam_terms) or "dam" in type_blob
     has_marine = has_any(marine_terms)
+    if non_fem_civil_only:
+        has_bridges = has_buildings = has_geotech = has_tunnels = has_foundations = has_dams = has_marine = False
 
     detected_flags = {
         "has_bridges": has_bridges,
@@ -1105,7 +1132,7 @@ Website excerpt: {corpus[:4000]}""",
         if sig.get(key)
     ]
 
-    fem_project_count = sum(1 for p in projects if p.get("fem_relevant"))
+    fem_project_count = 0 if non_fem_civil_only else sum(1 for p in projects if p.get("fem_relevant"))
     engineering_project_count = sum(1 for detected in detected_flags.values() if detected)
     if projects and not sig.get("project_count_on_site"):
         sig["project_count_on_site"] = len(projects)
@@ -1129,7 +1156,18 @@ Website excerpt: {corpus[:4000]}""",
         "metro", "underground", "high-rise", "deep excavation",
     )
 
-    if fem_from_text:
+    if non_fem_civil_only:
+        sig["core_service"] = "civil_no_structural"
+        sig["fem_evidence"] = "no_fem"
+        sig["project_complexity"] = "simple"
+        for key in ("has_bridges","has_buildings","has_geotech","has_tunnels","has_foundations","has_dams","has_marine"):
+            sig[key] = False
+        detected_labels = []
+        if survey_only:
+            fem_evidence_items = ["surveying/geospatial services without structural or geotechnical analysis evidence"]
+        else:
+            fem_evidence_items = ["highway/alignment design without structural, geotechnical, or FEM analysis evidence"]
+    elif fem_from_text:
         sig["fem_evidence"] = "explicit_fem_mentioned"
     elif fem_project_count or has_bridges or has_geotech or has_tunnels or has_foundations or has_dams:
         if sig.get("fem_evidence") in (None, "", "no_fem", "possible_fem"):
@@ -1255,6 +1293,8 @@ Website excerpt: {corpus[:4000]}""",
 
     # Total
     lead_score = max(0, min(100, rel + fem + buy + acc + cmp))
+    if non_fem_civil_only:
+        lead_score = min(lead_score, 25)
     overall = "Hot" if lead_score >= 70 else ("Warm" if lead_score >= 40 else "Cold")
     evidence_summary = "; ".join(dict.fromkeys(fem_evidence_items or detected_labels)) or "no strong structural/FEM evidence detected"
     structural_reason = f"Core: {core.replace('_',' ')}"
@@ -1280,9 +1320,14 @@ Website excerpt: {corpus[:4000]}""",
     sales_data["overall_score"] = overall
     sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). {core.replace('_',' ').title()} with {fem_ev.replace('_',' ')}. Evidence: {evidence_summary}. {ppl} people found; software: {sig.get('competitor_software','unknown').replace('_',' ')}."
 
-    if lead_score < 30:
+    if non_fem_civil_only or lead_score < 30:
         sales_data["recommended_products"] = []
         sales_data["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
+        if non_fem_civil_only:
+            if survey_only:
+                sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Surveying/geospatial company with no structural, geotechnical design, or FEM analysis evidence."
+            else:
+                sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Highway/alignment design company with no structural, geotechnical design, or FEM analysis evidence."
 
     sales_data.pop("signals", None)
     return json.dumps(sales_data)
