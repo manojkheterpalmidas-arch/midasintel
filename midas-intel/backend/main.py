@@ -94,6 +94,17 @@ def save_history(entry):
         cd = entry.get("company_data", {}) or {}
         cd["locations"] = clean_locations(cd.get("locations", []))
         entry["company_data"] = cd
+        if is_non_fem_civil_company(cd):
+            sd = entry.get("sales_data", {}) or {}
+            if isinstance(sd, dict):
+                sd["lead_score"] = min(int(sd.get("lead_score") or entry.get("lead_score") or 25), 25)
+                sd["overall_score"] = "Cold"
+                sd["score_reason"] = f"Score {sd['lead_score']}/100 (Cold). Surveying/geospatial or highway/alignment company with no structural, geotechnical design, or FEM analysis evidence."
+                sd["recommended_products"] = []
+                sd["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
+                entry["sales_data"] = sd
+                entry["lead_score"] = sd["lead_score"]
+            entry["score"] = "Cold"
         supabase.table("midas_history").upsert({
             "domain":       entry["domain"],
             "company":      entry["company"],
@@ -113,6 +124,16 @@ def sanitize_history_entry(entry):
     if isinstance(cd, dict):
         cd["locations"] = clean_locations(cd.get("locations", []))
         entry["company_data"] = cd
+        sd = entry.get("sales_data", {}) or {}
+        if isinstance(sd, dict) and is_non_fem_civil_company(cd):
+            sd["lead_score"] = min(int(sd.get("lead_score") or entry.get("lead_score") or 25), 25)
+            sd["overall_score"] = "Cold"
+            sd["score_reason"] = f"Score {sd['lead_score']}/100 (Cold). Surveying/geospatial or highway/alignment company with no structural, geotechnical design, or FEM analysis evidence."
+            sd["recommended_products"] = []
+            sd["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
+            entry["sales_data"] = sd
+            entry["lead_score"] = sd["lead_score"]
+            entry["score"] = "Cold"
     return entry
 
 def find_in_history(domain):
@@ -337,6 +358,49 @@ def clean_locations(locations):
             seen.add(key)
             cleaned.append(value)
     return cleaned[:5]
+
+def is_non_fem_civil_company(company_data):
+    def flatten(value):
+        if isinstance(value, dict):
+            return " ".join(flatten(v) for v in value.values())
+        if isinstance(value, list):
+            return " ".join(flatten(v) for v in value)
+        return str(value or "")
+
+    blob = re.sub(r"[^a-z0-9+/#.-]+", " ", flatten(company_data).lower())
+
+    def has_phrase(terms):
+        for term in terms:
+            normalized = re.sub(r"[^a-z0-9+/#.-]+", " ", term.lower()).strip()
+            if normalized and re.search(rf"(?<![a-z0-9]){re.escape(normalized)}(?![a-z0-9])", blob):
+                return True
+        return False
+
+    survey_terms = (
+        "land survey", "land surveying", "topographical survey", "topographic survey",
+        "measured building survey", "utility survey", "laser scanning", "3d scanning",
+        "drone survey", "uav survey", "aerial survey", "geomatics", "geospatial",
+        "mapping", "setting out", "site survey", "boundary survey", "as-built survey",
+        "surveying services", "survey company", "surveyors", "geodetic", "geodesy",
+        "geodetske", "geoprostorne", "gnss", "total station", "cadastral", "cadastre",
+        "land registry", "staking out", "deformation monitoring", "photogrammetry",
+        "lidar", "point cloud", "bim model", "3d modelling", "3d modeling",
+    )
+    civil_design_no_fem_terms = (
+        "highway design", "highways design", "road design", "roads design",
+        "alignment design", "horizontal alignment", "vertical alignment",
+        "highway alignment", "road alignment", "route alignment", "corridor design",
+        "junction design", "roundabout design", "road geometry", "geometric design",
+        "civil 3d corridor", "road drainage", "highway drainage", "s278",
+        "section 278", "s38", "section 38", "pavement design",
+    )
+    analysis_design_terms = (
+        "structural design", "structural analysis", "finite element", "fea", "fem",
+        "geotechnical design", "ground engineering", "soil-structure", "slope stability",
+        "foundation design", "piling design", "retaining wall design", "tunnel design",
+        "bridge design", "seismic design", "nonlinear analysis", "non-linear analysis",
+    )
+    return (has_phrase(survey_terms) or has_phrase(civil_design_no_fem_terms)) and not has_phrase(analysis_design_terms)
 
 
 # ── CRAWLING ─────────────────────────────────────────────────────────────────
@@ -1057,6 +1121,16 @@ Website excerpt: {corpus[:4000]}""",
     def has_any(terms, blob=company_blob):
         return any(term in blob for term in terms)
 
+    def has_phrase(terms, blob=company_blob):
+        normalized_blob = re.sub(r"[^a-z0-9+/#.-]+", " ", blob.lower())
+        for term in terms:
+            normalized_term = re.sub(r"[^a-z0-9+/#.-]+", " ", term.lower()).strip()
+            if not normalized_term:
+                continue
+            if re.search(rf"(?<![a-z0-9]){re.escape(normalized_term)}(?![a-z0-9])", normalized_blob):
+                return True
+        return False
+
     bridge_terms = ("bridge", "viaduct", "flyover", "highway", "railway", "rail", "transport infrastructure")
     building_terms = ("building", "residential", "commercial", "mixed-use", "mixed use", "high-rise", "housing")
     geotech_terms = ("geotechnical", "ground engineering", "soil mechanics", "soil-structure",
@@ -1081,6 +1155,7 @@ Website excerpt: {corpus[:4000]}""",
         "surveying services", "survey company", "surveyors",
         "geodetic", "geodesy", "geodetske", "geoprostorne", "gnss", "total station",
         "cadastral", "cadastre", "land registry", "staking out", "deformation monitoring",
+        "photogrammetry", "lidar", "point cloud", "bim model", "3d modelling", "3d modeling",
     )
     civil_design_no_fem_terms = (
         "highway design", "highways design", "road design", "roads design",
@@ -1099,9 +1174,10 @@ Website excerpt: {corpus[:4000]}""",
     )
     non_engineering_terms = ("marketing agency", "law firm", "accountancy", "restaurant", "retail shop")
 
-    survey_only = has_any(survey_terms) and not has_any(analysis_design_terms)
-    geodetic_only = has_any(("geodetic", "geodesy", "geodetske", "geoprostorne")) and not has_any(analysis_design_terms)
-    civil_design_no_fem_only = has_any(civil_design_no_fem_terms) and not has_any(analysis_design_terms)
+    has_analysis_design = has_phrase(analysis_design_terms)
+    survey_only = has_phrase(survey_terms) and not has_analysis_design
+    geodetic_only = has_phrase(("geodetic", "geodesy", "geodetske", "geoprostorne")) and not has_analysis_design
+    civil_design_no_fem_only = has_phrase(civil_design_no_fem_terms) and not has_analysis_design
     non_fem_civil_only = survey_only or geodetic_only or civil_design_no_fem_only
     type_blob = " ".join(project_types)
     has_bridges = has_any(bridge_terms) or "bridge" in type_blob
