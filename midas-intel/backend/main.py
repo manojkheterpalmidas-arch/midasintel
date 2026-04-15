@@ -400,7 +400,18 @@ def is_non_fem_civil_company(company_data):
         "foundation design", "piling design", "retaining wall design", "tunnel design",
         "bridge design", "seismic design", "nonlinear analysis", "non-linear analysis",
     )
-    return (has_phrase(survey_terms) or has_phrase(civil_design_no_fem_terms)) and not has_phrase(analysis_design_terms)
+    major_infrastructure_terms = (
+        "tunnel", "tunnelling", "underground", "power tunnel", "hs2", "rail",
+        "bridge", "viaduct", "nuclear", "decommissioning", "sellafield",
+        "major infrastructure", "infrastructure contractor", "civil engineering contractor",
+        "construction", "design and build", "water treatment", "energy infrastructure",
+        "geotechnical", "foundation", "retaining wall", "deep excavation",
+    )
+    return (
+        (has_phrase(survey_terms) or has_phrase(civil_design_no_fem_terms))
+        and not has_phrase(analysis_design_terms)
+        and not has_phrase(major_infrastructure_terms)
+    )
 
 
 # ── CRAWLING ─────────────────────────────────────────────────────────────────
@@ -1172,13 +1183,23 @@ Website excerpt: {corpus[:4000]}""",
         "foundation design", "piling design", "retaining wall design", "tunnel design",
         "bridge design", "seismic design", "nonlinear analysis", "non-linear analysis",
     )
+    major_infrastructure_terms = (
+        "tunnel", "tunnelling", "underground", "power tunnel", "hs2", "rail",
+        "bridge", "viaduct", "nuclear", "decommissioning", "sellafield",
+        "major infrastructure", "infrastructure contractor", "civil engineering contractor",
+        "construction", "design and build", "water treatment", "energy infrastructure",
+        "geotechnical", "foundation", "retaining wall", "deep excavation",
+    )
     non_engineering_terms = ("marketing agency", "law firm", "accountancy", "restaurant", "retail shop")
 
     has_analysis_design = has_phrase(analysis_design_terms)
+    major_infrastructure_company = has_phrase(major_infrastructure_terms)
     survey_only = has_phrase(survey_terms) and not has_analysis_design
     geodetic_only = has_phrase(("geodetic", "geodesy", "geodetske", "geoprostorne")) and not has_analysis_design
     civil_design_no_fem_only = has_phrase(civil_design_no_fem_terms) and not has_analysis_design
-    non_fem_civil_only = survey_only or geodetic_only or civil_design_no_fem_only
+    non_fem_civil_only = (
+        survey_only or geodetic_only or civil_design_no_fem_only
+    ) and not major_infrastructure_company
     type_blob = " ".join(project_types)
     has_bridges = has_any(bridge_terms) or "bridge" in type_blob
     has_buildings = has_any(building_terms) or any(t in type_blob for t in ("building", "residential", "industrial"))
