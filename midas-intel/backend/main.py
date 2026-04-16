@@ -1061,7 +1061,7 @@ def analyze_sales(corpus, company_json):
 
   "signals": {{
     "core_service": "structural_only|geotech_only|structural_and_geotech|multi_discipline_with_structural|civil_no_structural|not_engineering",
-    "company_type": "design_consultancy|design_build_contractor|major_contractor|specialist_contractor|pure_contractor|surveyor_or_geospatial|supplier_or_manufacturer|public_body|unknown",
+    "company_type": "design_consultancy|design_build_contractor|major_contractor|specialist_contractor|pure_contractor|surveyor_or_geospatial|supplier_or_manufacturer|electrical_engineering_non_fem|public_body|unknown",
     "project_complexity": "complex|moderate|simple|none",
     "fem_evidence": "explicit_fem_mentioned|likely_fem_from_projects|possible_fem|no_fem",
     "competitor_software": "none_detected|basic_tools_only|competitor_detected|locked_in",
@@ -1134,6 +1134,8 @@ Website excerpt: {corpus[:4000]}""",
         company_data.get("open_roles"),
         corpus[:8000],
     )
+    for artifact in ("fem_relevant", "fem relevant", "FEM-relevant project", "fem evidence"):
+        company_blob = company_blob.replace(artifact.lower(), " ")
 
     def has_any(terms, blob=company_blob):
         return any(term in blob for term in terms)
@@ -1148,7 +1150,7 @@ Website excerpt: {corpus[:4000]}""",
                 return True
         return False
 
-    bridge_terms = ("bridge", "viaduct", "flyover", "highway", "railway", "rail", "transport infrastructure")
+    bridge_terms = ("bridge", "viaduct", "flyover", "highway bridge", "railway bridge", "transport infrastructure")
     building_terms = ("building", "residential", "commercial", "mixed-use", "mixed use", "high-rise", "housing")
     geotech_terms = ("geotechnical", "ground engineering", "soil mechanics", "soil-structure",
                      "slope stability", "retaining wall design", "deep excavation",
@@ -1234,10 +1236,24 @@ Website excerpt: {corpus[:4000]}""",
         "public agency", "transport authority", "highways authority",
         "department for transport", "national highways", "network rail",
     )
+    electrical_power_terms = (
+        "electrical power", "power engineering", "electrical engineering",
+        "electroenergetic", "electroenergetskih", "elektroenergetskih",
+        "substation", "substations", "transformatorske stanice", "trafostanice",
+        "transformer", "transformers", "switchgear", "switchyard",
+        "transmission line", "transmission lines", "dalekovod", "cable line",
+        "power plant", "scada", "protection system", "relay protection",
+        "insulation coordination", "protection coordination", "earthing",
+        "grounding", "commissioning", "testing and commissioning", "fat", "sat",
+    )
     non_engineering_terms = ("marketing agency", "law firm", "accountancy", "restaurant", "retail shop")
 
     has_analysis_design = has_phrase(analysis_design_terms)
     major_infrastructure_company = has_phrase(major_infrastructure_terms)
+    electrical_power_only = has_phrase(electrical_power_terms) and not (
+        has_phrase(analysis_design_terms)
+        or has_phrase(("civil engineering", "structural engineering", "geotechnical", "bridge design", "foundation design", "tunnel design"))
+    )
     survey_only = has_phrase(survey_terms) and not has_analysis_design
     geodetic_only = has_phrase(("geodetic", "geodesy", "geodetske", "geoprostorne")) and not has_analysis_design
     civil_design_no_fem_only = has_phrase(civil_design_no_fem_terms) and not has_analysis_design
@@ -1252,7 +1268,7 @@ Website excerpt: {corpus[:4000]}""",
     has_foundations = has_any(foundation_terms) or "foundation" in type_blob
     has_dams = has_any(dam_terms) or "dam" in type_blob
     has_marine = has_any(marine_terms)
-    if non_fem_civil_only:
+    if electrical_power_only or non_fem_civil_only:
         has_bridges = has_buildings = has_geotech = has_tunnels = has_foundations = has_dams = has_marine = False
 
     detected_flags = {
@@ -1285,9 +1301,17 @@ Website excerpt: {corpus[:4000]}""",
     has_specialist_contractor = has_phrase(specialist_contractor_terms)
     has_supplier_manufacturer = has_phrase(supplier_manufacturer_terms)
     has_public_body = bool(sig.get("is_government_body")) or has_phrase(public_body_terms)
+    if electrical_power_only:
+        has_bridges = has_buildings = has_geotech = has_tunnels = has_foundations = has_dams = has_marine = False
+        for key in ("has_bridges","has_buildings","has_geotech","has_tunnels","has_foundations","has_dams","has_marine"):
+            sig[key] = False
+        detected_labels = []
     major_technical_project = has_bridges or has_geotech or has_tunnels or has_foundations or has_dams or has_marine
 
-    if non_fem_civil_only and (survey_only or geodetic_only):
+    if electrical_power_only:
+        company_type = "electrical_engineering_non_fem"
+        company_type_reason = "electrical power/substation engineering without civil, structural, geotechnical, or FEM evidence"
+    elif non_fem_civil_only and (survey_only or geodetic_only):
         company_type = "surveyor_or_geospatial"
         company_type_reason = "surveying/geospatial services without structural or geotechnical analysis evidence"
     elif has_public_body:
@@ -1364,9 +1388,10 @@ Website excerpt: {corpus[:4000]}""",
         keep_relevant = strong_project_evidence or (
             llm_marked_relevant
             and company_type in ("design_consultancy", "design_build_contractor")
+            and not electrical_power_only
             and not weak_delivery_only
         )
-        project["fem_relevant"] = bool(keep_relevant and not non_fem_civil_only)
+        project["fem_relevant"] = bool(keep_relevant and not non_fem_civil_only and not electrical_power_only)
         if project["fem_relevant"]:
             scored_fem_projects.append(project)
 
@@ -1405,7 +1430,17 @@ Website excerpt: {corpus[:4000]}""",
         "metro", "underground", "high-rise", "deep excavation",
     )
 
-    if non_fem_civil_only:
+    if electrical_power_only:
+        sig["core_service"] = "not_engineering"
+        sig["fem_evidence"] = "no_fem"
+        sig["project_complexity"] = "none"
+        for key in ("has_bridges","has_buildings","has_geotech","has_tunnels","has_foundations","has_dams","has_marine"):
+            sig[key] = False
+        detected_labels = []
+        fem_project_count = 0
+        engineering_project_count = 0
+        fem_evidence_items = ["electrical power/substation engineering without civil/structural/geotechnical FEM evidence"]
+    elif non_fem_civil_only:
         sig["core_service"] = "civil_no_structural"
         sig["fem_evidence"] = "no_fem"
         sig["project_complexity"] = "simple"
@@ -1553,6 +1588,8 @@ Website excerpt: {corpus[:4000]}""",
         company_type_cap = 60
     elif company_type == "surveyor_or_geospatial":
         company_type_cap = 25
+    elif company_type == "electrical_engineering_non_fem":
+        company_type_cap = 35
     elif company_type == "major_contractor":
         company_type_cap = 85 if fem_ev in ("explicit_fem_mentioned", "likely_fem_from_projects") or detected_labels else 50
     elif company_type == "specialist_contractor":
@@ -1560,10 +1597,12 @@ Website excerpt: {corpus[:4000]}""",
     elif company_type == "design_build_contractor":
         company_type_cap = 85
 
-    lead_score = max(0, min(100, rel + fem + buy + acc + cmp + company_type_adjustment))
+    raw_lead_score = max(0, min(100, rel + fem + buy + acc + cmp + company_type_adjustment))
+    lead_score = raw_lead_score
     lead_score = min(lead_score, company_type_cap)
     if non_fem_civil_only:
         lead_score = min(lead_score, 25)
+        company_type_cap = min(company_type_cap, 25)
     overall = "Hot" if lead_score >= 70 else ("Warm" if lead_score >= 40 else "Cold")
     evidence_summary = "; ".join(dict.fromkeys(fem_evidence_items or detected_labels)) or "no strong structural/FEM evidence detected"
     structural_reason = f"Core: {core.replace('_',' ')}"
@@ -1577,6 +1616,8 @@ Website excerpt: {corpus[:4000]}""",
 
     # Build breakdown
     sales_data["lead_score"] = lead_score
+    sales_data["raw_lead_score"] = raw_lead_score
+    sales_data["score_cap"] = company_type_cap
     sales_data["company_type"] = company_type
     sales_data["company_type_reason"] = company_type_reason
     sales_data["score_breakdown"] = {
@@ -1592,10 +1633,12 @@ Website excerpt: {corpus[:4000]}""",
     sales_data["overall_score"] = overall
     sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). {company_type.replace('_',' ').title()} - {core.replace('_',' ').title()} with {fem_ev.replace('_',' ')}. Evidence: {evidence_summary}. {ppl} people found; software: {sig.get('competitor_software','unknown').replace('_',' ')}."
 
-    if non_fem_civil_only or lead_score < 30:
+    if non_fem_civil_only or electrical_power_only or lead_score < 30:
         sales_data["recommended_products"] = []
         sales_data["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
-        if non_fem_civil_only:
+        if electrical_power_only:
+            sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Electrical power engineering company with no civil, structural, geotechnical design, or FEM analysis evidence."
+        elif non_fem_civil_only:
             if survey_only or geodetic_only:
                 sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Surveying/geodetic company with no structural, geotechnical design, or FEM analysis evidence."
             else:
