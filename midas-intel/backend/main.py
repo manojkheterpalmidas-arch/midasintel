@@ -816,7 +816,7 @@ Extract ALL people — engineering and technical staff only.
 For locations: include any city mentioned as company headquarters, office, or base location — check footer addresses, contact pages, and about sections.
 For employee_count: check ALL sources including Glassdoor, LinkedIn, Companies House.
 For projects: extract ALL completed or ongoing projects mentioned anywhere.
-For fem_relevant: set to true if the project involves structural analysis, FEA, FEM, geotechnical modelling, soil analysis, slope stability, foundation design, tunnelling, or any work where engineering analysis software would be used.
+For fem_relevant: set to true ONLY when the project text explicitly involves structural/geotechnical design, FEA, FEM, finite element analysis, geotechnical modelling, soil analysis, slope stability, foundation design, tunnelling, bridges/viaducts, retaining walls, dams, deep excavation, or temporary works design. Do NOT mark routine building construction, roadworks, fit-out, MEP installation, utilities, residential/commercial construction, or generic infrastructure delivery as fem_relevant unless design/analysis evidence is stated.
 Website content:
 {corpus}""",
         max_tokens=8000
@@ -1307,7 +1307,57 @@ Website excerpt: {corpus[:4000]}""",
         company_type_reason = "no clear consultancy, contractor, supplier, or public-body pattern detected"
     sig["company_type"] = company_type
 
-    fem_project_count = 0 if non_fem_civil_only else sum(1 for p in projects if p.get("fem_relevant"))
+    project_strong_fem_terms = (
+        "finite element", "fea", "fem", "structural analysis", "structural design",
+        "geotechnical design", "geotechnical analysis", "soil analysis", "soil-structure",
+        "slope stability", "foundation design", "piling design", "retaining wall",
+        "deep excavation", "temporary works design", "tunnel", "tunnelling",
+        "underground", "bridge", "viaduct", "dam", "seismic", "nonlinear", "non-linear",
+    )
+    project_weak_construction_terms = (
+        "construction", "reconstruction", "renovation", "refurbishment", "fit-out",
+        "fit out", "installation", "maintenance", "rehabilitation", "roadworks",
+        "road works", "asphalt", "paving", "pavement", "utility", "utilities",
+        "water supply", "sewer", "drainage", "residential", "commercial",
+        "school", "hospital", "warehouse", "electrical", "mechanical", "mep",
+    )
+
+    def project_blob(project):
+        return text_join(
+            project.get("name"),
+            project.get("type"),
+            project.get("description"),
+            project.get("client"),
+            project.get("location"),
+        )
+
+    def project_has_phrase(project, terms):
+        return has_phrase(terms, project_blob(project))
+
+    trusted_project_types = {
+        "bridge", "metro", "geotechnical", "tunnel", "foundation",
+        "slope", "dam", "retaining wall",
+    }
+    scored_fem_projects = []
+    for project in projects:
+        p_type = str(project.get("type") or "").lower()
+        p_blob = project_blob(project)
+        strong_project_evidence = (
+            project_has_phrase(project, project_strong_fem_terms)
+            or any(t in p_type for t in trusted_project_types)
+        )
+        weak_delivery_only = project_has_phrase(project, project_weak_construction_terms) and not strong_project_evidence
+        llm_marked_relevant = bool(project.get("fem_relevant"))
+        keep_relevant = strong_project_evidence or (
+            llm_marked_relevant
+            and company_type in ("design_consultancy", "design_build_contractor")
+            and not weak_delivery_only
+        )
+        project["fem_relevant"] = bool(keep_relevant and not non_fem_civil_only)
+        if project["fem_relevant"]:
+            scored_fem_projects.append(project)
+
+    fem_project_count = len(scored_fem_projects)
     engineering_project_count = sum(1 for detected in detected_flags.values() if detected)
     if projects and not sig.get("project_count_on_site"):
         sig["project_count_on_site"] = len(projects)
@@ -1317,7 +1367,18 @@ Website excerpt: {corpus[:4000]}""",
         "nonlinear", "non-linear", "seismic", "dynamic analysis", "structural analysis",
         "soil analysis", "slope stability", "construction stage", "load analysis",
     )
-    fem_from_text = has_any(explicit_fem_terms)
+    llm_artifact_terms = ("fem_relevant", "FEM-relevant project", "fem evidence")
+    public_company_blob = text_join(
+        company_data.get("tagline"),
+        company_data.get("overview"),
+        company_data.get("engineering_capabilities"),
+        company_data.get("project_types"),
+        company_data.get("open_roles"),
+        corpus[:8000],
+    )
+    for artifact in llm_artifact_terms:
+        public_company_blob = public_company_blob.replace(artifact.lower(), " ")
+    fem_from_text = has_phrase(explicit_fem_terms, public_company_blob)
     fem_evidence_items = []
     if fem_project_count:
         fem_evidence_items.append(f"{fem_project_count} FEM-relevant project(s)")
