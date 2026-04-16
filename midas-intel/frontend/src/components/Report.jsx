@@ -235,6 +235,9 @@ function OpportunitiesTab({ sd }) {
 function StrategyTab({ sd }) {
   const breakdown = sd.score_breakdown || {}
   const leadScore = sd.lead_score ?? null
+  const rawLeadScore = typeof sd.raw_lead_score === 'number' ? sd.raw_lead_score : null
+  const scoreCap = typeof sd.score_cap === 'number' ? sd.score_cap : null
+  const capApplied = rawLeadScore !== null && leadScore !== null && rawLeadScore > leadScore
 
   return (
     <div className="tab-grid">
@@ -250,6 +253,13 @@ function StrategyTab({ sd }) {
                 <ScoreBar label="Buying signals" data={breakdown.buying_signals} max={20} />
                 <ScoreBar label="Accessibility" data={breakdown.accessibility} max={15} />
                 <ScoreBar label="Competitive landscape" data={breakdown.competitive_landscape} max={10} />
+                {capApplied && (
+                  <div className="score-cap-note">
+                    Raw category score {rawLeadScore}/100 capped to {leadScore}/100
+                    {sd.company_type ? ` because this is classified as ${safeStr(sd.company_type).replaceAll('_', ' ')}` : ''}
+                    {scoreCap !== null ? ` (cap ${scoreCap}/100)` : ''}.
+                  </div>
+                )}
               </div>
             </div>
           </>
