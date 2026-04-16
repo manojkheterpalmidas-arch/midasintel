@@ -404,7 +404,8 @@ def is_non_fem_civil_company(company_data):
         "tunnel", "tunnelling", "underground", "power tunnel", "hs2", "rail",
         "bridge", "viaduct", "nuclear", "decommissioning", "sellafield",
         "major infrastructure", "infrastructure contractor", "civil engineering contractor",
-        "construction", "design and build", "water treatment", "energy infrastructure",
+        "heavy civil construction", "infrastructure construction", "underground construction",
+        "design and build", "water treatment", "energy infrastructure",
         "geotechnical", "foundation", "retaining wall", "deep excavation",
     )
     return (
@@ -1056,6 +1057,7 @@ def analyze_sales(corpus, company_json):
 
   "signals": {{
     "core_service": "structural_only|geotech_only|structural_and_geotech|multi_discipline_with_structural|civil_no_structural|not_engineering",
+    "company_type": "design_consultancy|design_build_contractor|major_contractor|specialist_contractor|pure_contractor|surveyor_or_geospatial|supplier_or_manufacturer|public_body|unknown",
     "project_complexity": "complex|moderate|simple|none",
     "fem_evidence": "explicit_fem_mentioned|likely_fem_from_projects|possible_fem|no_fem",
     "competitor_software": "none_detected|basic_tools_only|competitor_detected|locked_in",
@@ -1187,8 +1189,38 @@ Website excerpt: {corpus[:4000]}""",
         "tunnel", "tunnelling", "underground", "power tunnel", "hs2", "rail",
         "bridge", "viaduct", "nuclear", "decommissioning", "sellafield",
         "major infrastructure", "infrastructure contractor", "civil engineering contractor",
-        "construction", "design and build", "water treatment", "energy infrastructure",
+        "heavy civil construction", "infrastructure construction", "underground construction",
+        "design and build", "water treatment", "energy infrastructure",
         "geotechnical", "foundation", "retaining wall", "deep excavation",
+    )
+    design_consultancy_terms = (
+        "consulting engineer", "consulting engineers", "engineering consultancy",
+        "design consultancy", "structural consultancy", "structural consultants",
+        "geotechnical consultancy", "geotechnical consultants", "civil engineering consultancy",
+        "civil engineering consultants", "design consultant", "design consultants",
+        "consultancy services", "engineering design services", "design services",
+    )
+    contractor_terms = (
+        "contractor", "contractors", "construction company", "construction contractor",
+        "main contractor", "principal contractor", "general contractor",
+        "civil engineering contractor", "infrastructure contractor",
+        "building contractor", "design and build", "design-build", "epc contractor",
+    )
+    specialist_contractor_terms = (
+        "piling contractor", "foundation contractor", "ground engineering contractor",
+        "tunnelling contractor", "tunnel contractor", "temporary works contractor",
+        "retaining wall contractor", "earthworks contractor", "marine contractor",
+        "demolition contractor", "remediation contractor",
+    )
+    supplier_manufacturer_terms = (
+        "manufacturer", "supplier", "fabricator", "fabrication", "precast",
+        "steelwork supplier", "product manufacturer", "construction products",
+        "materials supplier", "equipment supplier",
+    )
+    public_body_terms = (
+        "local authority", "city council", "county council", "government body",
+        "public agency", "transport authority", "highways authority",
+        "department for transport", "national highways", "network rail",
     )
     non_engineering_terms = ("marketing agency", "law firm", "accountancy", "restaurant", "retail shop")
 
@@ -1235,6 +1267,45 @@ Website excerpt: {corpus[:4000]}""",
         )
         if sig.get(key)
     ]
+
+    has_design_consultancy = has_phrase(design_consultancy_terms)
+    has_contractor = has_phrase(contractor_terms)
+    has_specialist_contractor = has_phrase(specialist_contractor_terms)
+    has_supplier_manufacturer = has_phrase(supplier_manufacturer_terms)
+    has_public_body = bool(sig.get("is_government_body")) or has_phrase(public_body_terms)
+    major_technical_project = has_bridges or has_geotech or has_tunnels or has_foundations or has_dams or has_marine
+
+    if non_fem_civil_only and (survey_only or geodetic_only):
+        company_type = "surveyor_or_geospatial"
+        company_type_reason = "surveying/geospatial services without structural or geotechnical analysis evidence"
+    elif has_public_body:
+        company_type = "public_body"
+        company_type_reason = "public or transport authority language detected"
+    elif has_design_consultancy and has_contractor:
+        company_type = "design_build_contractor"
+        company_type_reason = "both design consultancy and contractor/design-build language detected"
+    elif has_design_consultancy:
+        company_type = "design_consultancy"
+        company_type_reason = "consulting/design engineering language detected"
+    elif has_specialist_contractor:
+        company_type = "specialist_contractor"
+        company_type_reason = "specialist contractor language detected"
+    elif has_contractor and (major_infrastructure_company or major_technical_project):
+        company_type = "major_contractor"
+        company_type_reason = "contractor language plus major infrastructure or technical project evidence"
+    elif has_contractor:
+        company_type = "pure_contractor"
+        company_type_reason = "contractor/construction language without clear in-house design or analysis evidence"
+    elif has_supplier_manufacturer:
+        company_type = "supplier_or_manufacturer"
+        company_type_reason = "supplier/manufacturer language detected"
+    elif non_fem_civil_only:
+        company_type = "pure_contractor"
+        company_type_reason = "civil/highway delivery language without structural, geotechnical, or FEM analysis evidence"
+    else:
+        company_type = sig.get("company_type") or "unknown"
+        company_type_reason = "no clear consultancy, contractor, supplier, or public-body pattern detected"
+    sig["company_type"] = company_type
 
     fem_project_count = 0 if non_fem_civil_only else sum(1 for p in projects if p.get("fem_relevant"))
     engineering_project_count = sum(1 for detected in detected_flags.values() if detected)
@@ -1332,7 +1403,7 @@ Website excerpt: {corpus[:4000]}""",
                 sig["company_size"] = "large_201_plus"
 
     correction_keys = (
-        "core_service", "fem_evidence", "project_complexity", "project_count_on_site",
+        "core_service", "company_type", "fem_evidence", "project_complexity", "project_count_on_site",
         "competitor_software", "people_found_count", "decision_makers_found", "company_size",
         "has_bridges", "has_buildings", "has_geotech", "has_tunnels",
         "has_foundations", "has_dams", "has_marine",
@@ -1396,7 +1467,27 @@ Website excerpt: {corpus[:4000]}""",
     cmp = {"none_detected": 9, "basic_tools_only": 6, "competitor_detected": 3, "locked_in": 1}.get(sig.get("competitor_software", "none_detected"), 5)
 
     # Total
-    lead_score = max(0, min(100, rel + fem + buy + acc + cmp))
+    company_type_adjustment = 0
+    company_type_cap = 100
+    if company_type == "pure_contractor":
+        company_type_adjustment = -6
+        company_type_cap = 65 if fem_ev in ("explicit_fem_mentioned", "likely_fem_from_projects") and detected_labels else 35
+    elif company_type == "supplier_or_manufacturer":
+        company_type_cap = 65 if fem_ev in ("explicit_fem_mentioned", "likely_fem_from_projects") else 45
+    elif company_type == "public_body":
+        company_type_adjustment = -5
+        company_type_cap = 60
+    elif company_type == "surveyor_or_geospatial":
+        company_type_cap = 25
+    elif company_type == "major_contractor":
+        company_type_cap = 85 if fem_ev in ("explicit_fem_mentioned", "likely_fem_from_projects") or detected_labels else 50
+    elif company_type == "specialist_contractor":
+        company_type_cap = 75 if fem_ev in ("explicit_fem_mentioned", "likely_fem_from_projects", "possible_fem") or detected_labels else 50
+    elif company_type == "design_build_contractor":
+        company_type_cap = 85
+
+    lead_score = max(0, min(100, rel + fem + buy + acc + cmp + company_type_adjustment))
+    lead_score = min(lead_score, company_type_cap)
     if non_fem_civil_only:
         lead_score = min(lead_score, 25)
     overall = "Hot" if lead_score >= 70 else ("Warm" if lead_score >= 40 else "Cold")
@@ -1412,17 +1503,20 @@ Website excerpt: {corpus[:4000]}""",
 
     # Build breakdown
     sales_data["lead_score"] = lead_score
+    sales_data["company_type"] = company_type
+    sales_data["company_type_reason"] = company_type_reason
     sales_data["score_breakdown"] = {
         "structural_relevance": {"score": rel, "reason": structural_reason},
         "fem_need": {"score": fem, "reason": fem_reason},
         "buying_signals": {"score": buy, "reason": f"Hiring structural: {sig.get('hiring_structural',False)}, projects: {pc}, expanding: {sig.get('expanding_offices',False)}"},
         "accessibility": {"score": acc, "reason": f"{ppl} people, decision makers: {sig.get('decision_makers_found',False)}, size: {sz.replace('_',' ')}"},
-        "competitive_landscape": {"score": cmp, "reason": f"Software: {sig.get('competitor_software','unknown').replace('_',' ')}" + (f" ({', '.join(sig.get('competitor_names',[]))})" if sig.get('competitor_names') else "")}
+        "competitive_landscape": {"score": cmp, "reason": f"Software: {sig.get('competitor_software','unknown').replace('_',' ')}" + (f" ({', '.join(sig.get('competitor_names',[]))})" if sig.get('competitor_names') else "")},
+        "company_type": {"score": company_type_adjustment, "reason": f"{company_type.replace('_',' ')}: {company_type_reason}; cap {company_type_cap}/100"}
     }
     sales_data["score_evidence"] = list(dict.fromkeys(fem_evidence_items or detected_labels))
     sales_data["signal_corrections"] = signal_corrections
     sales_data["overall_score"] = overall
-    sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). {core.replace('_',' ').title()} with {fem_ev.replace('_',' ')}. Evidence: {evidence_summary}. {ppl} people found; software: {sig.get('competitor_software','unknown').replace('_',' ')}."
+    sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). {company_type.replace('_',' ').title()} - {core.replace('_',' ').title()} with {fem_ev.replace('_',' ')}. Evidence: {evidence_summary}. {ppl} people found; software: {sig.get('competitor_software','unknown').replace('_',' ')}."
 
     if non_fem_civil_only or lead_score < 30:
         sales_data["recommended_products"] = []
@@ -2219,7 +2313,7 @@ def export_csv_route():
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "Company","Domain","Lead Score","Score Label","Score Reason",
+        "Company","Domain","Lead Score","Score Label","Company Type","Company Type Reason","Score Reason",
         "Structural Relevance (/30)","FEM Need (/25)","Buying Signals (/20)","Accessibility (/15)","Competitive Landscape (/10)",
         "Relevance Reason","FEM Need Reason","Buying Signals Reason","Accessibility Reason","Competitive Reason",
         "Date Analysed","Pages Crawled",
@@ -2249,6 +2343,8 @@ def export_csv_route():
             h.get("company",""), h.get("domain",""),
             sd.get("lead_score", h.get("lead_score", "")),
             h.get("score",""),
+            sd.get("company_type",""),
+            sd.get("company_type_reason",""),
             sd.get("score_reason",""),
             sb_score("structural_relevance"), sb_score("fem_need"), sb_score("buying_signals"), sb_score("accessibility"), sb_score("competitive_landscape"),
             sb_reason("structural_relevance"), sb_reason("fem_need"), sb_reason("buying_signals"), sb_reason("accessibility"), sb_reason("competitive_landscape"),
