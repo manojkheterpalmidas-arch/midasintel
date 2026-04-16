@@ -385,6 +385,9 @@ def is_non_fem_civil_company(company_data):
         "geodetske", "geoprostorne", "gnss", "total station", "cadastral", "cadastre",
         "land registry", "staking out", "deformation monitoring", "photogrammetry",
         "lidar", "point cloud", "bim model", "3d modelling", "3d modeling",
+        "gis", "geographic information system", "remote sensing", "engineering geodesy",
+        "hydrographic survey", "bathymetry survey", "digital topography", "orthophoto",
+        "topographical maps", "cadastral maps", "cartographic",
     )
     civil_design_no_fem_terms = (
         "highway design", "highways design", "road design", "roads design",
@@ -401,7 +404,8 @@ def is_non_fem_civil_company(company_data):
         "bridge design", "seismic design", "nonlinear analysis", "non-linear analysis",
     )
     major_infrastructure_terms = (
-        "tunnel", "tunnelling", "underground", "power tunnel", "hs2", "rail",
+        "tunnel", "tunnelling", "underground construction", "underground engineering",
+        "underground works", "underground excavation", "power tunnel", "hs2", "rail",
         "bridge", "viaduct", "nuclear", "decommissioning", "sellafield",
         "major infrastructure", "infrastructure contractor", "civil engineering contractor",
         "heavy civil construction", "infrastructure construction", "underground construction",
@@ -1151,7 +1155,11 @@ Website excerpt: {corpus[:4000]}""",
                      "geotechnical design", "geotechnical analysis", "ground investigation",
                      "geotechnical investigation", "borehole", "triaxial", "consolidation",
                      "bearing capacity", "earth pressure", "earthworks design")
-    tunnel_terms = ("tunnel", "tunnelling", "underground", "metro")
+    tunnel_terms = (
+        "tunnel", "tunnelling", "metro", "underground construction",
+        "underground engineering", "underground works", "underground excavation",
+        "underground structure", "underground structures",
+    )
     foundation_terms = ("foundation", "piling", "pile", "underpinning")
     dam_terms = ("dam", "reservoir", "embankment")
     marine_terms = ("marine", "coastal", "harbour", "port", "quay")
@@ -1169,6 +1177,9 @@ Website excerpt: {corpus[:4000]}""",
         "geodetic", "geodesy", "geodetske", "geoprostorne", "gnss", "total station",
         "cadastral", "cadastre", "land registry", "staking out", "deformation monitoring",
         "photogrammetry", "lidar", "point cloud", "bim model", "3d modelling", "3d modeling",
+        "gis", "geographic information system", "remote sensing", "engineering geodesy",
+        "hydrographic survey", "bathymetry survey", "digital topography", "orthophoto",
+        "topographical maps", "cadastral maps", "cartographic",
     )
     civil_design_no_fem_terms = (
         "highway design", "highways design", "road design", "roads design",
@@ -1186,7 +1197,8 @@ Website excerpt: {corpus[:4000]}""",
         "bridge design", "seismic design", "nonlinear analysis", "non-linear analysis",
     )
     major_infrastructure_terms = (
-        "tunnel", "tunnelling", "underground", "power tunnel", "hs2", "rail",
+        "tunnel", "tunnelling", "underground construction", "underground engineering",
+        "underground works", "underground excavation", "power tunnel", "hs2", "rail",
         "bridge", "viaduct", "nuclear", "decommissioning", "sellafield",
         "major infrastructure", "infrastructure contractor", "civil engineering contractor",
         "heavy civil construction", "infrastructure construction", "underground construction",
@@ -1312,7 +1324,8 @@ Website excerpt: {corpus[:4000]}""",
         "geotechnical design", "geotechnical analysis", "soil analysis", "soil-structure",
         "slope stability", "foundation design", "piling design", "retaining wall",
         "deep excavation", "temporary works design", "tunnel", "tunnelling",
-        "underground", "bridge", "viaduct", "dam", "seismic", "nonlinear", "non-linear",
+        "underground construction", "underground engineering", "underground works",
+        "underground excavation", "bridge", "viaduct", "dam", "seismic", "nonlinear", "non-linear",
     )
     project_weak_construction_terms = (
         "construction", "reconstruction", "renovation", "refurbishment", "fit-out",
