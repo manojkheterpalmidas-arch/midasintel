@@ -1335,27 +1335,48 @@ Website excerpt: {corpus[:4000]}""",
         "public agency", "transport authority", "highways authority",
         "department for transport", "national highways", "network rail",
     )
+    # Electrical-power-only indicators. Keep this list narrow: every term here
+    # must be unambiguously electrical. Generic construction/supervision vocabulary
+    # ("commissioning", "testing and commissioning", "earthing", "grounding",
+    # "fat", "sat") was removed because it fires on civil/infrastructure
+    # consultancies that do construction supervision (e.g. InfraKonsult).
     electrical_power_terms = (
         "electrical power", "power engineering", "electrical engineering",
         "electroenergetic", "electroenergetskih", "elektroenergetskih",
         "substation", "substations", "transformatorske stanice", "trafostanice",
         "transformer", "transformers", "switchgear", "switchyard",
         "transmission line", "transmission lines", "dalekovod", "cable line",
-        "power plant", "scada", "protection system", "relay protection",
-        "insulation coordination", "protection coordination", "earthing",
-        "grounding", "commissioning", "testing and commissioning", "fat", "sat",
+        "power plant", "scada", "relay protection",
+        "insulation coordination", "protection coordination",
     )
     non_engineering_terms = ("marketing agency", "law firm", "accountancy", "restaurant", "retail shop")
 
+    # Broad civil/infrastructure rescue list. If ANY of these appear, we refuse
+    # to mark the company as electrical-only/facade-only, because they indicate
+    # the company operates in civil or structural engineering work.
+    civil_rescue_terms = (
+        "civil engineering", "structural engineering", "geotechnical",
+        "bridge design", "foundation design", "tunnel design",
+        "engineering consultancy", "engineering consultant", "consulting engineer",
+        "consulting engineers", "infrastructure consultancy",
+        "highways", "highway design", "road design", "roads and",
+        "bridges", "viaduct", "airport", "airports",
+        "water supply", "sewage", "drainage", "irrigation",
+        "construction supervision", "supervision of construction",
+        "building design", "buildings and", "structural design",
+        "geological", "geodesy", "geodetic",
+    )
+
     has_analysis_design = has_phrase(analysis_design_terms)
     major_infrastructure_company = has_phrase(major_infrastructure_terms)
+    has_civil_rescue = has_phrase(civil_rescue_terms)
     electrical_power_only = has_phrase(electrical_power_terms) and not (
-        has_phrase(analysis_design_terms)
-        or has_phrase(("civil engineering", "structural engineering", "geotechnical", "bridge design", "foundation design", "tunnel design"))
+        has_phrase(analysis_design_terms) or has_civil_rescue
     )
     facade_only = has_phrase(facade_terms) and not (
         has_phrase(analysis_design_terms)
-        or has_phrase(("civil engineering", "structural engineering", "geotechnical", "bridge design", "foundation design", "tunnel design", "temporary works design"))
+        or has_civil_rescue
+        or has_phrase(("temporary works design",))
     )
     survey_only = has_phrase(survey_terms) and not has_analysis_design
     geodetic_only = has_phrase(("geodetic", "geodesy", "geodetske", "geoprostorne")) and not has_analysis_design
