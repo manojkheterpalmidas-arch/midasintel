@@ -255,7 +255,7 @@ function StrategyTab({ sd }) {
                 <ScoreBar label="Competitive landscape" data={breakdown.competitive_landscape} max={10} />
                 {capApplied && (
                   <div className="score-cap-note">
-                    Raw category score {rawLeadScore}/100 capped to {leadScore}/100
+                    Category bars show raw evidence: {rawLeadScore}/100. Final lead score capped to {leadScore}/100
                     {sd.company_type ? ` because this is classified as ${safeStr(sd.company_type).replaceAll('_', ' ')}` : ''}
                     {scoreCap !== null ? ` (cap ${scoreCap}/100)` : ''}.
                   </div>
