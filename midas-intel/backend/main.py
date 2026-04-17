@@ -1061,7 +1061,7 @@ def analyze_sales(corpus, company_json):
 
   "signals": {{
     "core_service": "structural_only|geotech_only|structural_and_geotech|multi_discipline_with_structural|civil_no_structural|not_engineering",
-    "company_type": "design_consultancy|design_build_contractor|major_contractor|specialist_contractor|pure_contractor|surveyor_or_geospatial|supplier_or_manufacturer|electrical_engineering_non_fem|public_body|unknown",
+    "company_type": "design_consultancy|design_build_contractor|major_contractor|specialist_contractor|pure_contractor|facade_contractor_non_fem|surveyor_or_geospatial|supplier_or_manufacturer|electrical_engineering_non_fem|public_body|unknown",
     "project_complexity": "complex|moderate|simple|none",
     "fem_evidence": "explicit_fem_mentioned|likely_fem_from_projects|possible_fem|no_fem",
     "competitor_software": "none_detected|basic_tools_only|competitor_detected|locked_in",
@@ -1168,7 +1168,16 @@ Website excerpt: {corpus[:4000]}""",
     structural_terms = (
         "structural engineer", "structural engineering", "structural design",
         "civil engineer", "civil engineering", "temporary works", "steelwork",
-        "reinforced concrete", "rc frame", "frame design", "facade engineering",
+        "reinforced concrete", "rc frame", "frame design",
+    )
+    facade_terms = (
+        "facade", "facades", "facade contractor",
+        "building envelope", "building envelopes",
+        "curtain wall", "curtain walls", "cladding", "rainscreen",
+        "glazing", "aluminium systems", "aluminum systems", "windows and doors",
+        "architectural aluminium", "architectural aluminum", "envelope contractor",
+        "facade engineering", "unitised facade",
+        "unitized facade", "on-site execution", "manufacturing and on-site execution",
     )
     survey_terms = (
         "land survey", "land surveying", "topographical survey", "topographic survey",
@@ -1254,6 +1263,10 @@ Website excerpt: {corpus[:4000]}""",
         has_phrase(analysis_design_terms)
         or has_phrase(("civil engineering", "structural engineering", "geotechnical", "bridge design", "foundation design", "tunnel design"))
     )
+    facade_only = has_phrase(facade_terms) and not (
+        has_phrase(analysis_design_terms)
+        or has_phrase(("civil engineering", "structural engineering", "geotechnical", "bridge design", "foundation design", "tunnel design", "temporary works design"))
+    )
     survey_only = has_phrase(survey_terms) and not has_analysis_design
     geodetic_only = has_phrase(("geodetic", "geodesy", "geodetske", "geoprostorne")) and not has_analysis_design
     civil_design_no_fem_only = has_phrase(civil_design_no_fem_terms) and not has_analysis_design
@@ -1268,7 +1281,7 @@ Website excerpt: {corpus[:4000]}""",
     has_foundations = has_any(foundation_terms) or "foundation" in type_blob
     has_dams = has_any(dam_terms) or "dam" in type_blob
     has_marine = has_any(marine_terms)
-    if electrical_power_only or non_fem_civil_only:
+    if electrical_power_only or facade_only or non_fem_civil_only:
         has_bridges = has_buildings = has_geotech = has_tunnels = has_foundations = has_dams = has_marine = False
 
     detected_flags = {
@@ -1306,11 +1319,19 @@ Website excerpt: {corpus[:4000]}""",
         for key in ("has_bridges","has_buildings","has_geotech","has_tunnels","has_foundations","has_dams","has_marine"):
             sig[key] = False
         detected_labels = []
+    if facade_only:
+        has_bridges = has_buildings = has_geotech = has_tunnels = has_foundations = has_dams = has_marine = False
+        for key in ("has_bridges","has_buildings","has_geotech","has_tunnels","has_foundations","has_dams","has_marine"):
+            sig[key] = False
+        detected_labels = []
     major_technical_project = has_bridges or has_geotech or has_tunnels or has_foundations or has_dams or has_marine
 
     if electrical_power_only:
         company_type = "electrical_engineering_non_fem"
         company_type_reason = "electrical power/substation engineering without civil, structural, geotechnical, or FEM evidence"
+    elif facade_only:
+        company_type = "facade_contractor_non_fem"
+        company_type_reason = "facade/building-envelope contractor without explicit structural analysis, geotechnical, or FEM evidence"
     elif non_fem_civil_only and (survey_only or geodetic_only):
         company_type = "surveyor_or_geospatial"
         company_type_reason = "surveying/geospatial services without structural or geotechnical analysis evidence"
@@ -1389,9 +1410,10 @@ Website excerpt: {corpus[:4000]}""",
             llm_marked_relevant
             and company_type in ("design_consultancy", "design_build_contractor")
             and not electrical_power_only
+            and not facade_only
             and not weak_delivery_only
         )
-        project["fem_relevant"] = bool(keep_relevant and not non_fem_civil_only and not electrical_power_only)
+        project["fem_relevant"] = bool(keep_relevant and not non_fem_civil_only and not electrical_power_only and not facade_only)
         if project["fem_relevant"]:
             scored_fem_projects.append(project)
 
@@ -1440,6 +1462,16 @@ Website excerpt: {corpus[:4000]}""",
         fem_project_count = 0
         engineering_project_count = 0
         fem_evidence_items = ["electrical power/substation engineering without civil/structural/geotechnical FEM evidence"]
+    elif facade_only:
+        sig["core_service"] = "civil_no_structural"
+        sig["fem_evidence"] = "no_fem"
+        sig["project_complexity"] = "simple"
+        for key in ("has_bridges","has_buildings","has_geotech","has_tunnels","has_foundations","has_dams","has_marine"):
+            sig[key] = False
+        detected_labels = []
+        fem_project_count = 0
+        engineering_project_count = 0
+        fem_evidence_items = ["facade/building-envelope contractor without explicit structural analysis or FEM evidence"]
     elif non_fem_civil_only:
         sig["core_service"] = "civil_no_structural"
         sig["fem_evidence"] = "no_fem"
@@ -1588,6 +1620,8 @@ Website excerpt: {corpus[:4000]}""",
         company_type_cap = 60
     elif company_type == "surveyor_or_geospatial":
         company_type_cap = 25
+    elif company_type == "facade_contractor_non_fem":
+        company_type_cap = 35
     elif company_type == "electrical_engineering_non_fem":
         company_type_cap = 35
     elif company_type == "major_contractor":
@@ -1633,11 +1667,13 @@ Website excerpt: {corpus[:4000]}""",
     sales_data["overall_score"] = overall
     sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). {company_type.replace('_',' ').title()} - {core.replace('_',' ').title()} with {fem_ev.replace('_',' ')}. Evidence: {evidence_summary}. {ppl} people found; software: {sig.get('competitor_software','unknown').replace('_',' ')}."
 
-    if non_fem_civil_only or electrical_power_only or lead_score < 30:
+    if non_fem_civil_only or electrical_power_only or facade_only or lead_score < 30:
         sales_data["recommended_products"] = []
         sales_data["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
         if electrical_power_only:
             sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Electrical power engineering company with no civil, structural, geotechnical design, or FEM analysis evidence."
+        elif facade_only:
+            sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Facade/building-envelope contractor with no explicit structural analysis, geotechnical design, or FEM analysis evidence."
         elif non_fem_civil_only:
             if survey_only or geodetic_only:
                 sales_data["score_reason"] = f"Score {lead_score}/100 ({overall}). Surveying/geodetic company with no structural, geotechnical design, or FEM analysis evidence."
