@@ -94,17 +94,20 @@ def save_history(entry):
         cd = entry.get("company_data", {}) or {}
         cd["locations"] = clean_locations(cd.get("locations", []))
         entry["company_data"] = cd
-        if is_non_fem_civil_company(cd):
-            sd = entry.get("sales_data", {}) or {}
-            if isinstance(sd, dict):
-                sd["lead_score"] = min(int(sd.get("lead_score") or entry.get("lead_score") or 25), 25)
-                sd["overall_score"] = "Cold"
-                sd["score_reason"] = f"Score {sd['lead_score']}/100 (Cold). Surveying/geospatial or highway/alignment company with no structural, geotechnical design, or FEM analysis evidence."
-                sd["recommended_products"] = []
-                sd["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
-                entry["sales_data"] = sd
-                entry["lead_score"] = sd["lead_score"]
-            entry["score"] = "Cold"
+        if is_facade_non_fem_company(cd):
+            apply_non_fem_override(
+                entry,
+                "facade_contractor_non_fem",
+                "Facade/building-envelope contractor with no explicit structural analysis, geotechnical design, or FEM analysis evidence",
+                35,
+            )
+        elif is_non_fem_civil_company(cd):
+            apply_non_fem_override(
+                entry,
+                "surveyor_or_geospatial",
+                "Surveying/geospatial or highway/alignment company with no structural, geotechnical design, or FEM analysis evidence",
+                25,
+            )
         supabase.table("midas_history").upsert({
             "domain":       entry["domain"],
             "company":      entry["company"],
@@ -125,15 +128,43 @@ def sanitize_history_entry(entry):
         cd["locations"] = clean_locations(cd.get("locations", []))
         entry["company_data"] = cd
         sd = entry.get("sales_data", {}) or {}
-        if isinstance(sd, dict) and is_non_fem_civil_company(cd):
-            sd["lead_score"] = min(int(sd.get("lead_score") or entry.get("lead_score") or 25), 25)
-            sd["overall_score"] = "Cold"
-            sd["score_reason"] = f"Score {sd['lead_score']}/100 (Cold). Surveying/geospatial or highway/alignment company with no structural, geotechnical design, or FEM analysis evidence."
-            sd["recommended_products"] = []
-            sd["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
-            entry["sales_data"] = sd
-            entry["lead_score"] = sd["lead_score"]
-            entry["score"] = "Cold"
+        if is_facade_non_fem_company(cd):
+            apply_non_fem_override(
+                entry,
+                "facade_contractor_non_fem",
+                "Facade/building-envelope contractor with no explicit structural analysis, geotechnical design, or FEM analysis evidence",
+                35,
+            )
+        elif is_non_fem_civil_company(cd):
+            apply_non_fem_override(
+                entry,
+                "surveyor_or_geospatial",
+                "Surveying/geospatial or highway/alignment company with no structural, geotechnical design, or FEM analysis evidence",
+                25,
+            )
+    return entry
+
+def apply_non_fem_override(entry, company_type, reason, cap):
+    sd = entry.get("sales_data", {}) or {}
+    if isinstance(sd, dict):
+        raw_score = int(sd.get("raw_lead_score") or sd.get("lead_score") or entry.get("lead_score") or cap)
+        existing_score = int(sd.get("lead_score") or entry.get("lead_score") or raw_score)
+        effective_cap = min(cap, existing_score)
+        final_score = min(raw_score, effective_cap)
+        sd["raw_lead_score"] = raw_score
+        sd["score_cap"] = effective_cap
+        sd["lead_score"] = final_score
+        sd["overall_score"] = "Cold" if final_score < 40 else ("Warm" if final_score < 70 else "Hot")
+        sd["company_type"] = company_type
+        sd["company_type_reason"] = reason
+        sd["score_reason"] = f"Score {final_score}/100 ({sd['overall_score']}). {reason}."
+        sd["recommended_products"] = []
+        sd["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
+        entry["sales_data"] = sd
+        entry["lead_score"] = final_score
+        entry["score"] = sd["overall_score"]
+    else:
+        entry["score"] = "Cold"
     return entry
 
 def find_in_history(domain):
@@ -416,6 +447,39 @@ def is_non_fem_civil_company(company_data):
         and not has_phrase(analysis_design_terms)
         and not has_phrase(major_infrastructure_terms)
     )
+
+def is_facade_non_fem_company(company_data):
+    def flatten(value):
+        if isinstance(value, dict):
+            return " ".join(flatten(v) for v in value.values())
+        if isinstance(value, list):
+            return " ".join(flatten(v) for v in value)
+        return str(value or "")
+
+    blob = re.sub(r"[^a-z0-9+/#.-]+", " ", flatten(company_data).lower())
+
+    def has_phrase(terms):
+        for term in terms:
+            normalized = re.sub(r"[^a-z0-9+/#.-]+", " ", term.lower()).strip()
+            if normalized and re.search(rf"(?<![a-z0-9]){re.escape(normalized)}(?![a-z0-9])", blob):
+                return True
+        return False
+
+    facade_terms = (
+        "facade", "facades", "facade contractor", "building envelope",
+        "building envelopes", "curtain wall", "curtain walls", "cladding",
+        "rainscreen", "glazing", "architectural aluminium", "architectural aluminum",
+        "envelope contractor", "facade engineering", "unitised facade",
+        "unitized facade", "on-site execution", "manufacturing and on-site execution",
+    )
+    analysis_design_terms = (
+        "structural design", "structural analysis", "finite element", "fea", "fem",
+        "geotechnical design", "ground engineering", "soil-structure", "slope stability",
+        "foundation design", "piling design", "retaining wall design", "tunnel design",
+        "bridge design", "seismic design", "nonlinear analysis", "non-linear analysis",
+        "temporary works design",
+    )
+    return has_phrase(facade_terms) and not has_phrase(analysis_design_terms)
 
 
 # ── CRAWLING ─────────────────────────────────────────────────────────────────
