@@ -375,19 +375,18 @@ def is_non_fem_civil_company(company_data):
             if normalized and re.search(rf"(?<![a-z0-9]){re.escape(normalized)}(?![a-z0-9])", blob):
                 return True
         return False
-
     survey_terms = (
         "land survey", "land surveying", "topographical survey", "topographic survey",
-        "measured building survey", "utility survey", "laser scanning", "3d scanning",
-        "drone survey", "uav survey", "aerial survey", "geomatics", "geospatial",
-        "mapping", "setting out", "site survey", "boundary survey", "as-built survey",
-        "surveying services", "survey company", "surveyors", "geodetic", "geodesy",
-        "geodetske", "geoprostorne", "gnss", "total station", "cadastral", "cadastre",
-        "land registry", "staking out", "deformation monitoring", "photogrammetry",
-        "lidar", "point cloud", "bim model", "3d modelling", "3d modeling",
-        "gis", "geographic information system", "remote sensing", "engineering geodesy",
-        "hydrographic survey", "bathymetry survey", "digital topography", "orthophoto",
-        "topographical maps", "cadastral maps", "cartographic",
+        "measured building survey", "utility survey",
+        "drone survey", "uav survey", "aerial survey", "geomatics", "geospatial services",
+        "setting out services", "site survey services", "boundary survey", "as-built survey",
+        "surveying services", "survey company", "geodetic survey", "geodesy",
+        "geodetske", "geoprostorne", "gnss surveying", "total station survey",
+        "cadastral survey", "cadastre", "cadastral mapping",
+        "land registry survey", "staking out", "deformation monitoring survey",
+        "photogrammetry services", "hydrographic survey", "bathymetry survey",
+        "digital topography", "orthophoto", "topographical maps", "cartographic services",
+        "engineering geodesy", "geographic information system services",
     )
     civil_design_no_fem_terms = (
         "highway design", "highways design", "road design", "roads design",
