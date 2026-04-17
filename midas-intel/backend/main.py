@@ -99,7 +99,7 @@ def save_history(entry):
                 entry,
                 "facade_contractor_non_fem",
                 "Facade/building-envelope contractor with no explicit structural analysis, geotechnical design, or FEM analysis evidence",
-                35,
+                20,
             )
         elif is_non_fem_civil_company(cd):
             apply_non_fem_override(
@@ -133,7 +133,7 @@ def sanitize_history_entry(entry):
                 entry,
                 "facade_contractor_non_fem",
                 "Facade/building-envelope contractor with no explicit structural analysis, geotechnical design, or FEM analysis evidence",
-                35,
+                20,
             )
         elif is_non_fem_civil_company(cd):
             apply_non_fem_override(
@@ -160,6 +160,33 @@ def apply_non_fem_override(entry, company_type, reason, cap):
         sd["score_reason"] = f"Score {final_score}/100 ({sd['overall_score']}). {reason}."
         sd["recommended_products"] = []
         sd["fem_opportunities"] = ["No direct FEM/FEA opportunities identified"]
+        if company_type == "facade_contractor_non_fem":
+            sd["score_breakdown"] = {
+                "structural_relevance": {"score": 6, "reason": "Facade/building-envelope work only; no explicit structural or geotechnical design evidence"},
+                "fem_need": {"score": 1, "reason": "FEM evidence: no FEM; facade delivery does not imply MIDAS FEM need"},
+                "buying_signals": {"score": 3, "reason": "No verified structural hiring or FEM buying trigger"},
+                "accessibility": {"score": 5, "reason": "General company contactability only"},
+                "competitive_landscape": {"score": 5, "reason": "No competing FEA software detected, but no FEM need confirmed"},
+                "company_type": {"score": 0, "reason": f"{company_type.replace('_',' ')}: {reason}; cap {effective_cap}/100"},
+            }
+        elif company_type == "surveyor_or_geospatial":
+            sd["score_breakdown"] = {
+                "structural_relevance": {"score": 3, "reason": "Surveying/geospatial/highway alignment services only; no structural or geotechnical design evidence"},
+                "fem_need": {"score": 1, "reason": "FEM evidence: no FEM; survey/alignment workflows do not imply MIDAS FEM need"},
+                "buying_signals": {"score": 4, "reason": "No verified structural hiring or FEM buying trigger"},
+                "accessibility": {"score": 7, "reason": "General company contactability only"},
+                "competitive_landscape": {"score": 10, "reason": "No competing FEA software detected, but no FEM need confirmed"},
+                "company_type": {"score": 0, "reason": f"{company_type.replace('_',' ')}: {reason}; cap {effective_cap}/100"},
+            }
+        elif company_type == "electrical_engineering_non_fem":
+            sd["score_breakdown"] = {
+                "structural_relevance": {"score": 2, "reason": "Electrical power/substation services only; no civil structural or geotechnical design evidence"},
+                "fem_need": {"score": 1, "reason": "FEM evidence: no civil FEM need confirmed"},
+                "buying_signals": {"score": 4, "reason": "No verified structural hiring or FEM buying trigger"},
+                "accessibility": {"score": 7, "reason": "General company contactability only"},
+                "competitive_landscape": {"score": 6, "reason": "No competing FEA software detected, but no MIDAS civil FEM need confirmed"},
+                "company_type": {"score": 0, "reason": f"{company_type.replace('_',' ')}: {reason}; cap {effective_cap}/100"},
+            }
         entry["sales_data"] = sd
         entry["lead_score"] = final_score
         entry["score"] = sd["overall_score"]
@@ -1684,9 +1711,9 @@ Website excerpt: {corpus[:4000]}""",
     elif company_type == "surveyor_or_geospatial":
         company_type_cap = 25
     elif company_type == "facade_contractor_non_fem":
-        company_type_cap = 35
+        company_type_cap = 20
     elif company_type == "electrical_engineering_non_fem":
-        company_type_cap = 35
+        company_type_cap = 20
     elif company_type == "major_contractor":
         company_type_cap = 85 if fem_ev in ("explicit_fem_mentioned", "likely_fem_from_projects") or detected_labels else 50
     elif company_type == "specialist_contractor":
@@ -1725,6 +1752,33 @@ Website excerpt: {corpus[:4000]}""",
         "competitive_landscape": {"score": cmp, "reason": f"Software: {sig.get('competitor_software','unknown').replace('_',' ')}" + (f" ({', '.join(sig.get('competitor_names',[]))})" if sig.get('competitor_names') else "")},
         "company_type": {"score": company_type_adjustment, "reason": f"{company_type.replace('_',' ')}: {company_type_reason}; cap {company_type_cap}/100"}
     }
+    if facade_only:
+        sales_data["score_breakdown"] = {
+            "structural_relevance": {"score": 6, "reason": "Facade/building-envelope work only; no explicit structural or geotechnical design evidence"},
+            "fem_need": {"score": 1, "reason": "FEM evidence: no FEM; facade delivery does not imply MIDAS FEM need"},
+            "buying_signals": {"score": 3, "reason": "No verified structural hiring or FEM buying trigger"},
+            "accessibility": {"score": 5, "reason": "General company contactability only"},
+            "competitive_landscape": {"score": 5, "reason": "No competing FEA software detected, but no FEM need confirmed"},
+            "company_type": {"score": 0, "reason": f"{company_type.replace('_',' ')}: {company_type_reason}; cap {company_type_cap}/100"},
+        }
+    elif non_fem_civil_only:
+        sales_data["score_breakdown"] = {
+            "structural_relevance": {"score": 3, "reason": "Surveying/geospatial/highway alignment services only; no structural or geotechnical design evidence"},
+            "fem_need": {"score": 1, "reason": "FEM evidence: no FEM; survey/alignment workflows do not imply MIDAS FEM need"},
+            "buying_signals": {"score": 4, "reason": "No verified structural hiring or FEM buying trigger"},
+            "accessibility": {"score": 7, "reason": "General company contactability only"},
+            "competitive_landscape": {"score": 10, "reason": "No competing FEA software detected, but no FEM need confirmed"},
+            "company_type": {"score": 0, "reason": f"{company_type.replace('_',' ')}: {company_type_reason}; cap {company_type_cap}/100"},
+        }
+    elif electrical_power_only:
+        sales_data["score_breakdown"] = {
+            "structural_relevance": {"score": 2, "reason": "Electrical power/substation services only; no civil structural or geotechnical design evidence"},
+            "fem_need": {"score": 1, "reason": "FEM evidence: no civil FEM need confirmed"},
+            "buying_signals": {"score": 4, "reason": "No verified structural hiring or FEM buying trigger"},
+            "accessibility": {"score": 7, "reason": "General company contactability only"},
+            "competitive_landscape": {"score": 6, "reason": "No competing FEA software detected, but no MIDAS civil FEM need confirmed"},
+            "company_type": {"score": 0, "reason": f"{company_type.replace('_',' ')}: {company_type_reason}; cap {company_type_cap}/100"},
+        }
     sales_data["score_evidence"] = list(dict.fromkeys(fem_evidence_items or detected_labels))
     sales_data["signal_corrections"] = signal_corrections
     sales_data["overall_score"] = overall
