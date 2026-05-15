@@ -1,0 +1,25 @@
+﻿services:
+  - type: web
+    name: midas-intel-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: FIRECRAWL_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
+      - key: SCRAPINGBEE_KEY
+        sync: false
+      - key: COMPANIES_HOUSE_KEY
+        sync: false
+
